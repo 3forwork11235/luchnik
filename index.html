@@ -398,6 +398,7 @@ input[type=range]{width:100%;accent-color:#ffcf4a;height:24px}
   <button class="btn" onclick="rotateDismissed=true;fit()">Играть так</button>
 </div>
 
+<div id="toast"></div>
 <script src="room.js"></script>
 <script>
 'use strict';
@@ -1674,7 +1675,7 @@ function track(field,n){
 function trackMax(field,v){if(v>(PROG[field]||0)){PROG[field]=v;track(field,0)}} // рекорд, а не сумма
 let toastT=null;
 function toast(t){
-  const el=$('toast');el.textContent=t;el.classList.add('show');sfx('win');
+  const el=toastEl();el.textContent=t;el.classList.add('show');sfx('win');
   clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3500);
 }
 // Внешний вид: шапка и оперение (видно и другим игрокам в онлайне)
@@ -2122,7 +2123,7 @@ function coachShot(p){if(ctrlOf(p)==='human'&&coachN<3){coachN++;lsSet('archer_c
 // ---- Версия и обновление ----
 // По номеру в меню видно, что на устройстве свежая игра. Открытая страница раз в 2 минуты (и при возвращении)
 // сверяется с сайтом: вышла новая версия — предлагаем обновиться (в онлайне важно, чтобы у всех была одна).
-const APP_VER='2.3';
+const APP_VER='2.4';
 let updShown=false;
 function checkUpdate(){
   if(!SERVED||updShown||document.hidden)return;
@@ -2989,7 +2990,8 @@ function quickJoin(){
   if(!/^[A-Z0-9]{6}$/.test(v)){$('joinId2').focus();quietToast('Введите код игры из 6 символов');return}
   $('joinId').value=v;audioInit();netJoin();
 }
-function quietToast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3500)}
+function toastEl(){let el=$('toast');if(!el){el=document.createElement('div');el.id='toast';document.body.append(el)}return el}
+function quietToast(t){const el=toastEl();el.textContent=t;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3500)}
 function saveServer(){const v=$('serverIp').value.trim();if(!v)return;serverIp=v;lsSet('archer_server_ip',v);netStatus('Адрес сохранён: '+wsUrl())}
 function netOnline(){return !!(NET.conn&&NET.conn.readyState===1)}
 function netSend(o){if(netOnline()){try{NET.conn.send(o);return true}catch(e){}}return false}
@@ -3736,7 +3738,7 @@ function netNotice(){
   return null;
 }
 
-(function(){
+try{(function(){
   // Открыли ссылку-приглашение — сразу входим в игру
   if(joinFromHash())return;
   // Вкладку перезагрузили посреди игры — возвращаемся в неё
@@ -3763,17 +3765,16 @@ function netNotice(){
     clearSession();lsDel(HOST_KEY);
     netStatus(err==='no-snapshot'?'Игра '+s.gid+' закрыта — создайте новую.':hostErrText(err));
   });
-})();
+})()}catch(e){console.error(e)} // сбой здесь не должен мешать запуску игры
 
 // PWA: игру можно «установить» на экран телефона и запускать без адресной строки
 if('serviceWorker' in navigator&&window.isSecureContext&&SERVED)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 $('btnSound').textContent=soundOn?'🔊':'🔇';
-renderProgress();
-initMenuUi();
+try{renderProgress()}catch(e){console.error(e)}
+try{initMenuUi()}catch(e){console.error(e)}
 if(!$('lobby').classList.contains('active')&&!$('game').classList.contains('active'))show('menu');
 requestAnimationFrame(frame);
 </script>
-<div id="toast"></div>
 </body>
 </html>

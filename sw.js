@@ -1,7 +1,7 @@
 // Service worker «Лучника»: игра открывается и без сети (для игры на одном устройстве
 // и для повторного запуска с иконки). Свои файлы — сначала из сети, чтобы обновления
 // приходили сразу; без сети — из кэша. Модуль связи PeerJS (с CDN) — из кэша.
-const CACHE='luchnik-v7'; // новое имя — старый кэш удалится при обновлении
+const CACHE='luchnik-v8'; // новое имя — старый кэш удалится при обновлении
 const SHELL=['./','./index.html','./room.js','./manifest.webmanifest','./icons/icon-180.png','./icons/icon-192.png','./icons/icon-512.png'];
 const PEERJS=['https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js','https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js']; // модули связи: P2P и запасной канал
 
