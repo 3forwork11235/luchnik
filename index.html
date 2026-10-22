@@ -43,6 +43,7 @@ label.chk input{width:20px;height:20px}
 #netStatus.bad{color:#ffb3a8;background:rgba(224,80,59,.10);border:1px solid rgba(224,80,59,.4)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .hostwarn{color:#ffe7a8;background:rgba(255,207,74,.10);border:1px solid rgba(255,207,74,.4);border-radius:12px;padding:10px 12px;font-size:14px;max-width:440px;margin:10px auto}
+#updBar{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:40;background:linear-gradient(180deg,#ffdc7a,#e2a02a);color:#1d1606;box-shadow:0 8px 24px rgba(0,0,0,.45);max-width:92vw;animation:rise .4s ease both}
 .joinq{display:flex;gap:8px;justify-content:center;align-items:center;margin:0 auto 14px;max-width:440px}
 .joinq input{flex:1;min-width:0;text-transform:uppercase;text-align:center;letter-spacing:.2em;background:rgba(16,22,38,.8)}
 #serverInfo{color:var(--muted);font-size:13px;margin-bottom:10px}
@@ -2118,6 +2119,25 @@ function drawCoach(){
 }
 function coachShot(p){if(ctrlOf(p)==='human'&&coachN<3){coachN++;lsSet('archer_coach',String(coachN))}}
 
+// ---- Версия и обновление ----
+// По номеру в меню видно, что на устройстве свежая игра. Открытая страница раз в 2 минуты (и при возвращении)
+// сверяется с сайтом: вышла новая версия — предлагаем обновиться (в онлайне важно, чтобы у всех была одна).
+const APP_VER='2.3';
+let updShown=false;
+function checkUpdate(){
+  if(!SERVED||updShown||document.hidden)return;
+  fetch('index.html?v='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(txt=>{
+    const m=/const APP_VER='([^']+)'/.exec(txt||'');
+    if(!m||m[1]===APP_VER)return;
+    updShown=true;
+    const b=document.createElement('button');b.id='updBar';b.className='btn';
+    b.textContent='⬆ Вышла новая версия '+m[1]+' — нажмите, чтобы обновить';
+    b.onclick=()=>{if(S&&mode!=='demo'&&!S.over&&!confirm('Обновить сейчас? Текущая партия прервётся.'))return;location.reload()};
+    document.body.append(b);
+  }).catch(()=>{});
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(checkUpdate,1500)});
+
 // ---- Меню: вкладки, настройки устройства, сводка правил партии ----
 function setTab(t){
   if(!$('tab-'+t))t='play';
@@ -2153,7 +2173,8 @@ function initMenuUi(){
   // звук можно включить только после первого касания страницы
   const wake=()=>{audioInit();removeEventListener('pointerdown',wake);removeEventListener('keydown',wake)};
   addEventListener('pointerdown',wake);addEventListener('keydown',wake);
-  $('menuFoot').textContent='Лучник 2.0 · время суток, музыка, кинокамера и тир';
+  $('menuFoot').textContent='Лучник · версия '+APP_VER;
+  setTimeout(checkUpdate,4000);setInterval(checkUpdate,120000);
 }
 // заставка раунда: «Раунд 2 · Закат · Дождь» с кинематографичными полосами
 function drawIntro(){
@@ -3197,7 +3218,8 @@ function hybridTransport(gid){
   const lostBoth=()=>{
     if(chosen||t.readyState===3)return;
     if(p.readyState===3&&(!m||m.readyState===3))
-      tLost(t,m&&m.err==='no-answer'&&p.err!=='peer-unavailable'?'no-answer':p.err||(m&&m.err));
+    {t.mqErr=m?m.err||'?':'не запускался';
+      tLost(t,m&&m.err==='no-answer'&&p.err!=='peer-unavailable'?'no-answer':p.err||(m&&m.err));}
   };
   const startMq=()=>{
     if(m||chosen||t.readyState===3)return;
@@ -3434,14 +3456,14 @@ function openSocket(first){
   t.onstage=st=>{if(NET.conn===t&&!NET.token&&STAGES[st])netStatus('Подключение к игре '+(first.game_id||NET.gameId)+': '+STAGES[st]+'…')};
   t.onopen=()=>{NET.route=t.kind||NET.via;NET.pingAt=NET.pongAt=0;t.send(first);keepAwake()};
   t.onmessage=onNet;
-  t.onclose=()=>{if(NET.conn!==t)return;NET.conn=null;NET.err=t.err;socketLost()};
+  t.onclose=()=>{if(NET.conn!==t)return;NET.conn=null;NET.err=t.err;NET.mqErr=t.mqErr||null;socketLost()};
 }
 function lostText(){
   if(NET.err==='peer-unavailable')return'❌ Игра не найдена. Проверьте код — и что создатель игры её не закрыл.';
   if(NET.via==='ws')return'❌ Нет соединения с сервером. Проверьте, что сервер запущен'+(PY_SERVER?' и устройство в той же сети.':' и адрес верный.');
   if(NET.err==='no-lib')return'❌ Не удалось загрузить модуль связи — нужен интернет.';
   if(NET.err==='no-answer')return'❌ Игра найдена, но создатель игры не отвечает. Попросите его открыть игру на экране (не сворачивать браузер) и нажмите «Войти» ещё раз.';
-  const code=' (код: '+(NET.err||'closed')+(hasTurn()?'':', без TURN')+')';
+  const code=' (код: '+(NET.err||'closed')+(NET.mqErr?', запасной канал: '+NET.mqErr:'')+(hasTurn()?'':', без TURN')+', версия '+APP_VER+')';
   if(/^ice-|timeout|negotiation/.test(NET.err||''))
     return'❌ Игра найдена, но соединиться не вышло. Попросите создателя игры держать игру открытой на экране (не сворачивать браузер) и нажмите «Войти» ещё раз.'+(hasTurn()?' Если не поможет — переключите одно из устройств между Wi-Fi и мобильным интернетом.':' Нужен ретранслятор (TURN) — он ещё не настроен.')+code;
   if(/network|server-error|socket|no-signal/.test(NET.err||''))return'❌ Нет связи с сервером знакомств (PeerJS) — проверьте интернет.'+code;
