@@ -306,6 +306,11 @@ function lsDel(k){try{localStorage.removeItem(k)}catch(e){}}
 // ================= Состояние =================
 let S=null, mode='2p';
 const opts={wind:true,birds:true,trees:'few',size:1,diff:'normal',bots:true,timer:0,specials:true,crates:true,weather:true,cover:true,wins:0,mode:'versus'};
+// Настройки устройства (не партии): графика, камера, звук. Хранятся на этом устройстве.
+const SETTINGS={tod:'auto',gfx:'high',cam:true,shake:1,ghost:true,coach:true,master:0.8,music:0.45,sfx:0.9,ambient:0.6};
+try{Object.assign(SETTINGS,JSON.parse(lsGet('archer_settings')||'{}')||{})}catch(e){}
+function saveSettings(){lsSet('archer_settings',JSON.stringify(SETTINGS))}
+const HQ=()=>SETTINGS.gfx!=='low';
 let ground=new Float32Array(W+1), trees=[], waterL=0, waterR=0, bgSky=null, bgLand=null;
 
 // ================= Мир =================
@@ -370,6 +375,7 @@ function buildWorld(seed,treesOpt,active,cover){
       }
     }
   }
+  todKey=pickTod(seed);TOD=TODS[todKey];
   renderBg(r);
   return sp;
 }
@@ -453,36 +459,88 @@ function updateTrees(dt){
   }
 }
 
+// ================= Время суток =================
+// Рассвет / день / закат / ночь. Выбирается по номеру раунда (seed), поэтому в онлайне у всех одинаково.
+// Это только картинка и звуки: на полёт стрел время суток не влияет.
+const TODS={
+  day:   {name:'День',   sky:['#5fa6e3','#b9def5','#eaf6ff'],sun:{glow:'255,240,170',core:'255,250,220',r:90, y:[70,110]},
+          mts:['#9cb6cf','#7fa58d'],gr:['#5d9c4a','#4a8239','#3a5f2a'],edge:'#6fb556',sand:'214,190,130',
+          water:['rgba(70,150,215,.85)','rgba(30,90,160,.9)'],cloud:'255,255,255',rays:0.028,grade:null,haze:'rgba(200,225,245,.18)'},
+  dawn:  {name:'Рассвет',sky:['#46588f','#d991a6','#ffd9ad'],sun:{glow:'255,200,160',core:'255,236,212',r:125,y:[318,342]},
+          mts:['#8a86ad','#6f8d86'],gr:['#5a9150','#467a3c','#35592b'],edge:'#77b35e',sand:'220,186,140',
+          water:['rgba(150,140,200,.85)','rgba(50,70,140,.9)'],cloud:'255,214,214',rays:0.05,grade:'rgb(255,232,222)',haze:'rgba(255,200,190,.16)'},
+  sunset:{name:'Закат',  sky:['#283a78','#e8735a','#ffc37a'],sun:{glow:'255,150,70',core:'255,222,150',r:145,y:[326,352]},
+          mts:['#6c5c86','#5c7562'],gr:['#5a8a3e','#476f31','#324f24'],edge:'#83ad52',sand:'226,170,120',
+          water:['rgba(205,125,110,.85)','rgba(60,60,120,.9)'],cloud:'255,196,160',rays:0.055,grade:'rgb(255,226,200)',haze:'rgba(255,170,120,.14)'},
+  night: {name:'Ночь',   sky:['#050a1c','#101b44','#24356a'],moon:true,
+          mts:['#253252','#223b3a'],gr:['#2f5c35','#24482a','#18301c'],edge:'#3e7a45',sand:'82,84,104',
+          water:['rgba(40,70,130,.88)','rgba(15,30,70,.92)'],cloud:'60,70,110',rays:0,grade:'rgb(150,166,220)',haze:'rgba(60,80,140,.18)'},
+};
+let TOD=TODS.day,todKey='day',stars=[],sunPos={x:600,y:90};
+// время суток раунда: из настроек или по seed (одинаково у всех игроков)
+function pickTod(seed){
+  const pref=SETTINGS.tod;
+  if(TODS[pref])return pref;
+  const h=hash01(seed|0,77,3);
+  return h<0.45?'day':h<0.62?'dawn':h<0.8?'sunset':'night';
+}
+
 function renderBg(r){
+  const P=TOD;
   bgSky=document.createElement('canvas');bgSky.width=W;bgSky.height=H;
   let g=bgSky.getContext('2d');
-  const sky=g.createLinearGradient(0,0,0,H);
-  sky.addColorStop(0,'#5fa6e3');sky.addColorStop(0.55,'#b9def5');sky.addColorStop(1,'#eaf6ff');
+  const sky=g.createLinearGradient(0,0,0,H*0.75);
+  sky.addColorStop(0,P.sky[0]);sky.addColorStop(0.6,P.sky[1]);sky.addColorStop(1,P.sky[2]);
   g.fillStyle=sky;g.fillRect(0,0,W,H);
-  const sx=150+r()*900,sy=70+r()*40;
-  const sun=g.createRadialGradient(sx,sy,8,sx,sy,90);
-  sun.addColorStop(0,'rgba(255,250,220,1)');sun.addColorStop(0.25,'rgba(255,240,170,.9)');sun.addColorStop(1,'rgba(255,240,170,0)');
-  g.fillStyle=sun;g.fillRect(sx-90,sy-90,180,180);
+  const sx=150+r()*900,syr=r();
+  stars=[];
+  if(P.moon){
+    // звёзды и луна
+    for(let i=0;i<170;i++){const x=r()*W,y=r()*360,s=r();stars.push({x,y,s,ph:r()*6.28});g.fillStyle='rgba(255,255,255,'+(0.25+s*0.6)+')';g.fillRect(x,y,s>0.85?2:1,s>0.85?2:1)}
+    const my=80+syr*40;sunPos={x:sx,y:my};
+    const glow=g.createRadialGradient(sx,my,10,sx,my,120);
+    glow.addColorStop(0,'rgba(210,225,255,.35)');glow.addColorStop(1,'rgba(210,225,255,0)');
+    g.fillStyle=glow;g.fillRect(sx-120,my-120,240,240);
+    g.fillStyle='#eef2ff';g.beginPath();g.arc(sx,my,22,0,7);g.fill();
+    g.fillStyle='rgba(170,180,210,.55)';
+    for(const [dx,dy,rr0] of [[-7,-5,5],[6,4,4],[-2,9,3],[9,-8,2.5]]){g.beginPath();g.arc(sx+dx,my+dy,rr0,0,7);g.fill()}
+  }else{
+    const sy=P.sun.y[0]+syr*(P.sun.y[1]-P.sun.y[0]);sunPos={x:sx,y:sy};
+    const sun=g.createRadialGradient(sx,sy,8,sx,sy,P.sun.r);
+    sun.addColorStop(0,'rgba('+P.sun.core+',1)');sun.addColorStop(0.25,'rgba('+P.sun.glow+',.9)');sun.addColorStop(1,'rgba('+P.sun.glow+',0)');
+    g.fillStyle=sun;g.fillRect(sx-P.sun.r,sy-P.sun.r,P.sun.r*2,P.sun.r*2);
+  }
 
   bgLand=document.createElement('canvas');bgLand.width=W;bgLand.height=H;
   g=bgLand.getContext('2d');
-  for(const L of [{y:360,amp:70,col:'#9cb6cf',f:0.004},{y:420,amp:40,col:'#7fa58d',f:0.008}]){
+  [{y:360,amp:70,f:0.004},{y:420,amp:40,f:0.008}].forEach((L,li)=>{
     const q1=r()*6,q2=r()*6;
-    g.fillStyle=L.col;g.beginPath();g.moveTo(0,H);
+    g.fillStyle=P.mts[li];g.beginPath();g.moveTo(0,H);
     for(let x=0;x<=W;x+=4)g.lineTo(x,L.y-L.amp*(0.6*Math.sin(x*L.f+q1)+0.4*Math.sin(x*L.f*2.3+q2)));
     g.lineTo(W,H);g.closePath();g.fill();
-  }
+    // воздушная перспектива: дальние горы тонут в дымке
+    const hz=g.createLinearGradient(0,L.y-L.amp,0,L.y+60);
+    hz.addColorStop(0,'rgba(0,0,0,0)');hz.addColorStop(1,P.haze);
+    g.save();g.globalCompositeOperation='source-atop';g.fillStyle=hz;g.fillRect(0,0,W,H);g.restore();
+  });
   const groundPath=()=>{g.beginPath();g.moveTo(0,H);for(let x=0;x<=W;x+=2)g.lineTo(x,ground[x]);g.lineTo(W,H);g.closePath()};
   const gr=g.createLinearGradient(0,470,0,H);
-  gr.addColorStop(0,'#5d9c4a');gr.addColorStop(0.35,'#4a8239');gr.addColorStop(1,'#3a5f2a');
+  gr.addColorStop(0,P.gr[0]);gr.addColorStop(0.35,P.gr[1]);gr.addColorStop(1,P.gr[2]);
   groundPath();g.fillStyle=gr;g.fill();
   g.save();groundPath();g.clip();
   const sand=g.createLinearGradient(waterL-60,0,waterR+60,0);
-  sand.addColorStop(0,'rgba(214,190,130,0)');sand.addColorStop(0.18,'rgba(214,190,130,1)');
-  sand.addColorStop(0.82,'rgba(214,190,130,1)');sand.addColorStop(1,'rgba(214,190,130,0)');
+  sand.addColorStop(0,'rgba('+P.sand+',0)');sand.addColorStop(0.18,'rgba('+P.sand+',1)');
+  sand.addColorStop(0.82,'rgba('+P.sand+',1)');sand.addColorStop(1,'rgba('+P.sand+',0)');
   g.fillStyle=sand;g.fillRect(waterL-60,450,waterR-waterL+120,H);
+  // мягкая тень под кромкой берега и пятна света на траве
+  for(let i=0;i<26;i++){
+    const x=r()*W;if(Math.abs(x-RIVER_C)<130)continue;
+    const y=groundAt(x)+8+r()*40,rw=30+r()*60;
+    g.fillStyle=r()<0.5?'rgba(255,255,255,.035)':'rgba(0,0,0,.05)';
+    g.beginPath();g.ellipse(x,y,rw,rw*0.25,0,0,7);g.fill();
+  }
   g.restore();
-  g.strokeStyle='#6fb556';g.lineWidth=3;g.beginPath();
+  g.strokeStyle=P.edge;g.lineWidth=3;g.beginPath();
   for(let x=0;x<=W;x+=2){if(Math.abs(x-RIVER_C)<120){g.moveTo(x+2,ground[x+2]||ground[W]);continue}g.lineTo(x,ground[x])}
   g.stroke();
   for(let i=0;i<260;i++){
@@ -537,7 +595,7 @@ function newMatch(cfg){
     time:0,banner:null,state:'aim',over:false,winner:null,overT:0,pending:null,flying:null,ai:null,
     turn:null,wind:0,netT:0,netLast:'',blockT:0,disconnected:false,unsentResult:null,turnNo:cfg.turnNo||0,
     shake:0,slowT:0,turnT:0,timeUp:false,emotes:{},
-    crates:[],crateTimer:rnd(8,14),weather:WEATHER[cfg.weather]?cfg.weather:'clear',ammoSel:'normal',volley:null,
+    crates:[],crateTimer:rnd(8,14),weather:WEATHER[cfg.weather]?cfg.weather:'clear',ammoSel:'normal',volley:null,ghost:{},streak:{},
     wave:cfg.wave||1,matchOver:!!cfg.match_over};
   // новый матч (счёт 0:0) или новый забег против волн — статистика с нуля
   if(!cfg.score||(cfg.score.left+cfg.score.right===0&&S.wave===1))MATCH.stats={};
@@ -554,7 +612,16 @@ function newMatch(cfg){
     for(let i=0;i<2;i++){const b=spawnBirds(rnd(200,1000));b.forEach(addBird);if(mode==='online')netSend({action:'bird_spawn',birds:b})}
   }
   beginTurn(cfg.turn||firstOf(cfg.starter||'left'),cfg.wind!=null?cfg.wind:nextWind());
-  if(S.opts.coop)showBanner('🌊 Волна '+S.wave,'#ffcf4a');
+  initAmbient();resetCam();S.hitStop=0;
+  if(mode!=='demo'){
+    // заставка раунда вместо обычного «Ход: …»
+    const WE=WEATHER[S.weather]||WEATHER.clear;
+    S.intro={T:2.4,t:2.4,title:S.opts.coop?'🌊 Волна '+S.wave:S.opts.range?'🎯 Тир':'Раунд '+(S.score.left+S.score.right+1),
+      sub:[TOD.name,WE.name,S.opts.wind?'ветер '+Math.abs(S.wind).toFixed(1)+' м/с':'безветрие'].filter(Boolean).join('  ·  '),
+      sub2:S.opts.range?'10 стрел — выбей как можно больше очков':'Первым ходит: '+nameOf(S.turn),col:'#dfe7f7'};
+    S.banner=null;
+    sfx('horn');
+  }
 }
 function firstOf(team){const m=members(team);return(m[0]||S.archers[0]).id}
 
@@ -724,7 +791,7 @@ function spawnArrow(p,angle,draw,no,kind,power){
   const k=flightK(kind),v=VMAX*draw*k.v,sp=shoulderPos(p);
   const a={owner:p.id,no:no|0,x:sp.x+Math.cos(angle)*16,y:sp.y+Math.sin(angle)*16,vx:Math.cos(angle)*v,vy:Math.sin(angle)*v,
     t:0,steps:0,acc:0,state:'fly',remote:false,hold:false,result:null,ang:angle,trail:[],kind:null,crowns:{},
-    type:kind,power:!!power,gk:k.g,dk:k.drag,idx:0,burnT:0};
+    type:kind,power:!!power,gk:k.g,dk:k.drag,idx:0,burnT:0,path:[]};
   S.arrows.push(a);
   return a;
 }
@@ -735,7 +802,7 @@ function launch(p,angle,draw,no,kind,power,remote){
   S.volley={arrows:list,results:new Array(list.length),left:list.length};
   S.flying=list[list.length>1?1:0];S.state='flight';
   statOf(p.id).shots++;
-  p.draw=0;p.sway=0;p.angle=angle;
+  p.draw=0;p.sway=0;p.angle=angle;p.twangT=0.32;
   sfx(kind==='heavy'?'heavy':kind==='fire'?'whoosh':'twang');
   return list;
 }
@@ -832,6 +899,7 @@ function updateArrows(dt){
       }
       a.acc-=DT;
       physStep(a,S.wind);
+      if(a.steps%4===0&&a.path.length<500)a.path.push(a.x,a.y); // путь для «призрака прошлого выстрела»
       const hit=collide(a);
       if(hit){
         if(a.remote){a.hold=true;if(hit.kind==='ground'){a.y=hit.y}}
@@ -840,7 +908,7 @@ function updateArrows(dt){
     }
     if(a.state==='fly'&&!a.hold){
       a.ang=Math.atan2(a.vy,a.vx);
-      a.trail.push({x:a.x,y:a.y});if(a.trail.length>16)a.trail.shift();
+      a.trail.push({x:a.x,y:a.y});if(a.trail.length>22)a.trail.shift();
       if(a.type==='fire'&&Math.random()<0.7)addPart({x:a.x,y:a.y,vx:rnd(-20,20),vy:rnd(-30,0),g:-40,color:Math.random()<0.5?'#ffb13b':'#ff6a2a',size:rnd(1.5,3),life:0.35,max:0.35});
     }
   }
@@ -852,6 +920,8 @@ function arrowColor(owner){return fletchColor(owner)} // оперение — п
 function resolveArrow(a,res){
   a.x=res.x;a.y=res.y;a.ang=res.ang;a.kind=res.kind;a.trail=[];
   const shooter=S.by[a.owner];
+  // запоминаем траекторию (у тройной — среднюю стрелу): в следующий ход её покажет «призрак»
+  if(a.idx===(S.volley&&S.volley.arrows.length>1?1:0)&&a.path.length>2){a.path.push(res.x,res.y);S.ghost[a.owner]={pts:a.path,kind:res.kind}}
   if(a.type==='fire')a.burnT=3;
   switch(res.kind){
     case'out':a.state='gone';addText(clamp(res.x,60,W-60),clamp(res.y,110,H-60),'Мимо','#fff');break;
@@ -906,7 +976,9 @@ function resolveArrow(a,res){
       // встряска, вибрация и замедление: попадание должно чувствоваться
       const head=res.zone==='head',kill=t.hp<=0;
       S.shake=Math.max(S.shake,head||kill?11:6);
-      if(head||kill)S.slowT=0.75;
+      if(head||kill){S.slowT=0.75;S.camFocus={x:res.x,y:res.y-10}}
+      S.hitStop=Math.max(S.hitStop||0,head||kill?0.09:0.05); // стоп-кадр: удар «чувствуется»
+      addPart({x:res.x,y:res.y,kind:'ring',g:0,life:0.35,max:0.35,size:head||kill?48:30,color:head?'#ffcf4a':'#ffffff'});
       if(ctrlOf(t)==='human')vibe(head?[90,40,160]:[70]);
       else if(shooter&&ctrlOf(shooter)==='human'&&head)vibe([30,30,30]);
       break;
@@ -1239,7 +1311,7 @@ function showBanner(text,color){S.banner={text,color:color||'#fff',t:1.5}}
 function updateFx(dt){
   for(const p of S.parts){
     const k=Math.pow(p.drag,dt*60);p.vx*=k;p.vy=(p.vy+p.g*dt)*k;
-    p.x+=p.vx*dt+(p.kind!=='dot'?Math.sin(S.time*4+p.rot)*18*dt:0);p.y+=p.vy*dt;p.rot+=p.vr*dt;p.life-=dt;
+    p.x+=p.vx*dt+(p.kind==='leaf'||p.kind==='feather'?Math.sin(S.time*4+p.rot)*18*dt:0);p.y+=p.vy*dt;p.rot+=p.vr*dt;p.life-=dt;
   }
   S.parts=S.parts.filter(p=>p.life>0);
   for(const id in S.emotes){S.emotes[id].t-=dt;if(S.emotes[id].t<=0)delete S.emotes[id]}
@@ -1459,12 +1531,18 @@ function update(dt){
     p.flinch=Math.max(0,p.flinch-dt*3);p.walkT-=dt;
     if(p.dead)p.deadT+=dt;
     p.hpShow+=(p.hp-p.hpShow)*Math.min(1,dt*6);
+    p.twangT=Math.max(0,(p.twangT||0)-dt);
+    // полоска «потерянного» здоровья догоняет основную с задержкой
+    if(p.lastHp!=null&&p.hp<p.lastHp)p.ghostT=0;
+    p.lastHp=p.hp;p.ghostT=(p.ghostT||0)+dt;
+    if(p.hpGhost==null||p.hpGhost<p.hpShow)p.hpGhost=p.hpShow;
+    else if(p.ghostT>0.55)p.hpGhost+=(p.hpShow-p.hpGhost)*Math.min(1,dt*2.6);
     if(p.netX!=null&&mode==='online'&&!iControl(p)&&S.state==='aim'){
       const d=p.netX-p.x;
       if(Math.abs(d)>0.3){p.x+=d*Math.min(1,dt*12);p.walk+=Math.abs(d)*Math.min(1,dt*12)*0.25;p.walkT=0.12}
     }
   }
-  updateArrows(dt);updateBirds(dt);updateCrates(dt);updateTrees(dt);updateFx(dt);
+  updateArrows(dt);updateBirds(dt);updateCrates(dt);updateTrees(dt);updateFx(dt);updateAmbient(dt);
   if(S.state==='settle'){
     S.settleT-=dt;
     if(S.settleT<=0){
@@ -1532,12 +1610,169 @@ function updateDom(){
   if(hu!==lastHuman){$('mvL').disabled=$('mvR').disabled=!hu;lastHuman=hu}
 }
 
+// ================= Атмосфера: камера, живность, свет =================
+// Кинокамера: во время полёта мягко следует за стрелой, при добивании/хедшоте — наезд в замедлении.
+// Прицеливание всегда в общем плане (на ввод камера не влияет: лук натягивается относительным движением).
+const CAM={x:W/2,y:H/2,z:1};
+function updateCam(dt){
+  let tx=W/2,ty=H/2,tz=1;
+  if(SETTINGS.cam&&S&&mode!=='demo'){
+    const a=S.flying;
+    if(S.camFocus&&S.slowT>0){tx=S.camFocus.x;ty=S.camFocus.y;tz=1.42}
+    else if(a&&a.state==='fly'&&S.state==='flight'){tx=a.x;ty=H/2+(clamp(a.y,-200,H)-H/2)*0.35;tz=1.14}
+  }
+  const k=Math.min(1,dt*3.2),kz=Math.min(1,dt*2.4);
+  CAM.x+=(tx-CAM.x)*k;CAM.y+=(ty-CAM.y)*k;CAM.z+=(tz-CAM.z)*kz;
+  const hw=W/(2*CAM.z),hh=H/(2*CAM.z);
+  CAM.x=clamp(CAM.x,hw,W-hw);CAM.y=clamp(CAM.y,hh,H-hh);
+}
+function resetCam(){CAM.x=W/2;CAM.y=H/2;CAM.z=1}
+
+// Живность и воздух: светлячки ночью, бабочки днём, пыльца на рассвете и закате, полосы ветра, трава на переднем плане
+let AMB=[],STREAKS=[],BLADES=[],vignette=null;
+function initAmbient(){
+  AMB=[];STREAKS=[];BLADES=[];
+  const n=HQ()?1:0.45;
+  if(todKey==='night')for(let i=0;i<24*n;i++)AMB.push({k:'fly',x:rnd(0,W),y:rnd(390,560),ph:rnd(0,6.28),sp:rnd(0.4,0.9)});
+  else if(todKey==='day')for(let i=0;i<6*n;i++)AMB.push({k:'bfly',x:rnd(0,W),y0:rnd(430,520),y:0,ph:rnd(0,6.28),dir:Math.random()<0.5?-1:1,col:['#ffe066','#ff8fab','#9fd3ff','#ffffff','#b197fc'][i%5]});
+  else for(let i=0;i<30*n;i++)AMB.push({k:'mote',x:rnd(0,W),y:rnd(180,560),ph:rnd(0,6.28),s:rnd(0.6,1.6)});
+  if(HQ())for(let i=0;i<150;i++){
+    const x=rnd(0,W);if(Math.abs(x-RIVER_C)<135)continue;
+    BLADES.push({x,h:rnd(5,12),lean:rnd(-0.35,0.35),col:Math.random()<0.5?TOD.edge:TOD.gr[1]});
+  }
+}
+function updateAmbient(dt){
+  const t=S.time,w=S.wind;
+  for(const b of AMB){
+    if(b.k==='fly'){b.x+=(Math.sin(t*b.sp+b.ph)*14+w*2)*dt;b.y+=Math.cos(t*0.8*b.sp+b.ph)*9*dt}
+    else if(b.k==='bfly'){b.x+=(b.dir*16+Math.sin(t*2+b.ph)*12+w*3)*dt;b.y=b.y0+Math.sin(t*2.6+b.ph)*9}
+    else{b.x+=(w*7+5)*b.s*dt;b.y+=Math.sin(t*0.9+b.ph)*5*dt}
+    if(b.x<-20)b.x=W+20;if(b.x>W+20)b.x=-20;
+  }
+  // полосы ветра: чем сильнее ветер, тем их больше и быстрее
+  const aw=Math.abs(w);
+  if(HQ()&&S.opts.wind&&aw>1&&STREAKS.length<aw*2.2&&Math.random()<dt*aw*1.2)
+    STREAKS.push({x:w>0?-90:W+90,y:rnd(50,430),len:rnd(40,110),a:rnd(0.5,1)});
+  for(const s of STREAKS)s.x+=w*PPM*1.7*dt;
+  STREAKS=STREAKS.filter(s=>s.x>-140&&s.x<W+140);
+}
+function drawStars(){
+  if(!TOD.moon)return;
+  ctx.fillStyle='#fff';
+  for(let i=0;i<stars.length;i+=3){
+    const s=stars[i],a=0.35+0.65*Math.max(0,Math.sin(S.time*(1+s.s*2)+s.ph));
+    ctx.globalAlpha=a*0.8;ctx.fillRect(s.x,s.y,1.6,1.6);
+  }
+  ctx.globalAlpha=1;
+}
+// лучи солнца сквозь воздух (днём, на рассвете и закате)
+function drawRays(){
+  const P=TOD;if(!P.rays||!HQ()||S.weather==='rain'||S.weather==='fog')return;
+  const {x,y}=sunPos,R=760;
+  const g=ctx.createRadialGradient(x,y,10,x,y,R);
+  g.addColorStop(0,'rgba(255,240,205,'+P.rays+')');g.addColorStop(1,'rgba(255,240,205,0)');
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.fillStyle=g;
+  for(let i=0;i<6;i++){
+    const a=0.5+i*0.42+Math.sin(S.time*0.15+i*1.3)*0.06,wd=0.05+0.035*Math.sin(i*2.1+S.time*0.2);
+    ctx.beginPath();ctx.moveTo(x,y);ctx.arc(x,y,R,a-wd,a+wd);ctx.closePath();ctx.fill();
+  }
+  ctx.restore();
+}
+function drawAmbient(){
+  const t=S.time;
+  for(const b of AMB){
+    if(b.k==='fly'){
+      const a=0.25+0.75*Math.max(0,Math.sin(t*2.6+b.ph));
+      ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle='rgba(255,236,120,'+(a*0.22)+')';ctx.beginPath();ctx.arc(b.x,b.y,7,0,7);ctx.fill();
+      ctx.fillStyle='rgba(255,250,190,'+a+')';ctx.beginPath();ctx.arc(b.x,b.y,1.6,0,7);ctx.fill();
+      ctx.globalCompositeOperation='source-over';
+    }else if(b.k==='bfly'){
+      const fl=Math.abs(Math.sin(t*14+b.ph));
+      ctx.fillStyle=b.col;
+      for(const s of [-1,1]){ctx.beginPath();ctx.ellipse(b.x+s*3*fl,b.y,3.2*fl+0.6,2.4,s*0.5,0,7);ctx.fill()}
+    }else{
+      ctx.fillStyle='rgba(255,240,210,'+(0.25+0.2*Math.sin(t+b.ph))+')';ctx.fillRect(b.x,b.y,1.6*b.s,1.6*b.s);
+    }
+  }
+}
+function drawStreaks(){
+  if(!STREAKS.length)return;
+  const aw=Math.min(1,Math.abs(S.wind)/8),d=S.wind>0?1:-1;
+  ctx.lineWidth=1;ctx.lineCap='round';
+  for(const s of STREAKS){
+    ctx.strokeStyle='rgba(255,255,255,'+(0.16*aw*s.a)+')';
+    ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.quadraticCurveTo(s.x-d*s.len*0.5,s.y-3,s.x-d*s.len,s.y+1);ctx.stroke();
+  }
+}
+// трава на переднем плане колышется от ветра и прикрывает ступни
+function drawBlades(){
+  if(!BLADES.length)return;
+  ctx.lineWidth=1.4;ctx.lineCap='round';
+  const t=S.time,w=S.wind;
+  for(const b of BLADES){
+    const gy=groundAt(b.x)+2,sway=Math.sin(t*2.2+b.x*0.05)*1.6+w*0.55+b.lean*b.h;
+    ctx.strokeStyle=b.col;ctx.beginPath();ctx.moveTo(b.x,gy);ctx.quadraticCurveTo(b.x+sway*0.3,gy-b.h*0.6,b.x+sway,gy-b.h);ctx.stroke();
+  }
+}
+// цветокоррекция под время суток и свет от огня (ночью огонь заметнее)
+function drawGrade(){
+  if(TOD.grade){ctx.save();ctx.globalCompositeOperation='multiply';ctx.fillStyle=TOD.grade;ctx.fillRect(-20,-20,W+40,H+40);ctx.restore()}
+  const night=TOD.moon?1:0.45;
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  const glow=(x,y,r,a)=>{const g=ctx.createRadialGradient(x,y,2,x,y,r);g.addColorStop(0,'rgba(255,150,60,'+a+')');g.addColorStop(1,'rgba(255,120,40,0)');ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2)};
+  for(const a of S.arrows)if(a.type==='fire'&&(a.state==='fly'||a.burnT>0))glow(a.x,a.y,60,0.35*night);
+  for(const t of trees)if(t.burnAt!=null&&!t.felled)glow(t.x,t.base-t.h-t.cr*0.35,t.cr*3.2,(0.3+0.08*Math.sin(S.time*9+t.seed))*night);
+  ctx.restore();
+}
+function drawVignette(){
+  if(!vignette){
+    vignette=document.createElement('canvas');vignette.width=W;vignette.height=H;
+    const g=vignette.getContext('2d'),gr=g.createRadialGradient(W/2,H*0.55,H*0.35,W/2,H*0.55,W*0.72);
+    gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,'rgba(0,0,0,.38)');
+    g.fillStyle=gr;g.fillRect(0,0,W,H);
+  }
+  ctx.drawImage(vignette,0,0,W,H);
+}
+// «Призрак» прошлого выстрела: пунктир прошлой траектории этого бойца — по нему удобно поправлять прицел
+function drawGhost(c){
+  if(!SETTINGS.ghost)return;
+  const g=S.ghost[c.id];if(!g||g.pts.length<4)return;
+  const p=g.pts,x=p[p.length-2],y=p[p.length-1];
+  ctx.save();
+  ctx.setLineDash([3,7]);ctx.lineWidth=1.6;ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(p[0],p[1]);for(let i=2;i<p.length;i+=2)ctx.lineTo(p[i],p[i+1]);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle=g.kind==='player'?'rgba(255,207,74,.75)':'rgba(255,255,255,.55)';ctx.lineWidth=2;
+  line(x-5,y-5,x+5,y+5);line(x-5,y+5,x+5,y-5);
+  ctx.restore();
+}
+let PAUSED=false;
+function drawTargets(){}
+function drawCoach(){}
+// заставка раунда: «Раунд 2 · Закат · Дождь» с кинематографичными полосами
+function drawIntro(){
+  const I=S.intro;if(!I||I.t<=0)return;
+  const T=I.T,age=T-I.t,inK=smooth(0,0.35,age),outK=1-smooth(T-0.45,T,age),k=Math.min(inK,outK);
+  const bar=46*k;
+  ctx.fillStyle='rgba(0,0,0,.82)';ctx.fillRect(0,0,W,bar);ctx.fillRect(0,H-bar,W,bar);
+  ctx.save();ctx.globalAlpha=k;ctx.textAlign='center';
+  const sc=UI*(0.92+0.08*inK);
+  ctx.translate(W/2,H*0.42);ctx.scale(sc,sc);
+  ctx.font='800 46px Segoe UI,Arial';ctx.lineWidth=7;ctx.strokeStyle='rgba(0,0,0,.5)';
+  ctx.strokeText(I.title,0,0);ctx.fillStyle='#ffe7a8';ctx.fillText(I.title,0,0);
+  ctx.font='600 18px Segoe UI,Arial';ctx.lineWidth=4;
+  ctx.strokeText(I.sub,0,32);ctx.fillStyle='#eef1f7';ctx.fillText(I.sub,0,32);
+  if(I.sub2){ctx.font='15px Segoe UI,Arial';ctx.strokeText(I.sub2,0,58);ctx.fillStyle=I.col||'#cfd6e6';ctx.fillText(I.sub2,0,58)}
+  ctx.restore();
+}
+
 // ================= Отрисовка =================
 function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
 function line(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
 
 function drawCloud(c){
-  ctx.fillStyle='rgba(255,255,255,.85)';
+  ctx.fillStyle='rgba('+TOD.cloud+','+(TOD.moon?0.55:0.85)+')';
   for(const [dx,dy,r] of [[0,0,22],[24,-8,26],[50,0,20],[26,8,22]]){ctx.beginPath();ctx.arc(c.x+dx*c.s,c.y+dy*c.s,r*c.s,0,7);ctx.fill()}
 }
 function drawWater(){
@@ -1548,14 +1783,28 @@ function drawWater(){
   for(let x=waterR;x>=waterL;x-=2)ctx.lineTo(x,Math.max(WATER_Y,ground[x]));
   ctx.closePath();
   const g=ctx.createLinearGradient(0,WATER_Y,0,600);
-  g.addColorStop(0,'rgba(70,150,215,.85)');g.addColorStop(1,'rgba(30,90,160,.9)');
+  g.addColorStop(0,TOD.water[0]);g.addColorStop(1,TOD.water[1]);
   ctx.fillStyle=g;ctx.fill();
-  ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=1.2;
-  const span=Math.max(1,waterR-waterL-40);
-  for(let i=0;i<5;i++){
-    const x=waterL+20+((i*47+S.time*(14+S.wind*3))%span+span)%span;
-    line(x,WATER_Y+3+(i%3)*4,x+10,WATER_Y+3+(i%3)*4);
+  ctx.save();ctx.clip();
+  // отражение светила — дорожка бликов, если оно над рекой
+  const sx=sunPos.x;
+  if(sx>waterL-80&&sx<waterR+80){
+    ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=TOD.moon?'rgba(200,215,255,.22)':'rgba(255,220,160,.28)';
+    for(let i=0;i<7;i++){
+      const y=WATER_Y+3+i*3.2,w=(14-i)*(0.7+0.3*Math.sin(S.time*3+i*1.7));
+      ctx.fillRect(sx-w/2+Math.sin(S.time*2+i)*3,y,w,1.4);
+    }
+    ctx.globalCompositeOperation='source-over';
   }
+  // течение: блики плывут по ветру
+  ctx.strokeStyle=TOD.moon?'rgba(190,210,255,.35)':'rgba(255,255,255,.55)';ctx.lineWidth=1.2;
+  const span=Math.max(1,waterR-waterL-40);
+  for(let i=0;i<8;i++){
+    const x=waterL+20+((i*61+S.time*(14+S.wind*3))%span+span)%span,yy=WATER_Y+3+(i%4)*4;
+    ctx.globalAlpha=0.4+0.6*Math.abs(Math.sin(S.time*1.3+i));line(x,yy,x+8+(i%3)*4,yy);
+  }
+  ctx.globalAlpha=1;ctx.restore();
 }
 function drawPosts(){
   for(const [x,col] of [[TERR.left[1],TEAM.left.color],[TERR.right[0],TEAM.right.color]]){
@@ -1647,28 +1896,49 @@ function drawArcher(p){
   ctx.fillStyle='rgba(0,0,0,.22)';ctx.beginPath();ctx.ellipse(0,1,16,4,0,0,7);ctx.fill();
   if(p.dead)ctx.rotate(-f*Math.min(1,p.deadT*2.5)*Math.PI/2*0.95);
   if(p.gone)ctx.globalAlpha=0.55;
+  // победители подпрыгивают с поднятым луком
+  const win=S.over&&S.winner===p.team&&!p.dead;
+  if(win)ctx.translate(0,-Math.abs(Math.sin(S.time*5.5+(p.id[1]==='1'?1.3:0)))*5);
   const lean=-f*p.flinch*3,sw=p.walkT>0?Math.sin(p.walk)*5:0;
+  const br=p.dead?0:Math.sin(S.time*2.1+p.x*0.013)*0.7; // дыхание
   ctx.lineCap='round';
+  if(!p.dead){
+    // плащ развевается по ветру, но всегда за спиной
+    const fl=Math.sin(S.time*5+p.x)*2.2,tail=-f*Math.max(6,14-f*S.wind*1.4);
+    ctx.fillStyle=p.dark;ctx.beginPath();ctx.moveTo(-f*3+lean,-41+br);
+    ctx.quadraticCurveTo(tail*0.8,-31+fl*0.4,tail+fl*0.6,-19+fl);ctx.lineTo(-f*4+lean,-24);ctx.closePath();ctx.fill();
+  }
   ctx.strokeStyle='#2d3142';ctx.lineWidth=4;
   line(0,-22,-4+sw,-1);line(0,-22,4-sw,-1);
   ctx.fillStyle='#3b2a1c';ctx.fillRect(-7+sw,-3,6,3);ctx.fillRect(1-sw,-3,6,3);
   ctx.save();ctx.translate(-f*6+lean,-40);ctx.rotate(f*0.35);
-  ctx.fillStyle='#6b4a2b';ctx.fillRect(-3,0,6,17);
+  ctx.fillStyle='#6b4a2b';ctx.fillRect(-3,0,6,17);ctx.fillStyle='#4e3520';ctx.fillRect(-3,12,6,2);
   ctx.strokeStyle='#ddd';ctx.lineWidth=1.5;line(-1.5,0,-2.5,-6);line(1.5,0,2,-6);ctx.restore();
-  ctx.fillStyle=p.color;rr(-6+lean,-42,12,21,4);ctx.fill();
+  ctx.fillStyle=p.color;rr(-6+lean,-42+br,12,21-br,4);ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,.17)';ctx.fillRect(f>0?-6+lean:lean,-40+br,6,18); // тень на спине
   ctx.fillStyle='#3a2a1a';ctx.fillRect(-6+lean,-26,12,3);
-  ctx.fillStyle='#f0c8a0';ctx.beginPath();ctx.arc(lean,-48,7,0,7);ctx.fill();
-  ctx.fillStyle=p.dark;ctx.beginPath();ctx.arc(lean,-49,7.6,Math.PI*1.02,Math.PI*1.98);ctx.fill();
-  ctx.fillStyle='#222';ctx.beginPath();ctx.arc(lean+f*3,-48,1.3,0,7);ctx.fill();
+  ctx.fillStyle='#d9b45a';ctx.fillRect(lean-1.5,-26,3,3); // пряжка
+  ctx.fillStyle='#f0c8a0';ctx.beginPath();ctx.arc(lean,-48+br,7,0,7);ctx.fill();
+  ctx.fillStyle=p.dark;ctx.beginPath();ctx.arc(lean,-49+br,7.6,Math.PI*1.02,Math.PI*1.98);ctx.fill();
+  // глаза моргают
+  const blink=!p.dead&&((S.time+p.x*0.37)%4.3)<0.13;
+  ctx.fillStyle='#222';
+  if(blink)ctx.fillRect(lean+f*3-1.5,-48+br,3,0.9);
+  else if(p.dead){ctx.strokeStyle='#222';ctx.lineWidth=1;line(lean+f*3-1.5,-49.5,lean+f*3+1.5,-46.5);line(lean+f*3-1.5,-46.5,lean+f*3+1.5,-49.5)}
+  else{ctx.beginPath();ctx.arc(lean+f*3,-48+br,1.3,0,7);ctx.fill()}
   const hat=skinOf(p.id).hat;if(hat&&hat!=='none')drawHat(hat,lean,f,p.dark);
   for(const s of p.stuck)drawArrowShape(s.dx,s.dy,s.ang,s.col,{len:20,noHead:true});
   if(!p.dead){
-    const a=hide?(p.team==='left'?-0.55:Math.PI+0.55):p.angle+(p.sway||0),dx=Math.cos(a),dy=Math.sin(a),nx=-dy,ny=dx;
+    const a=hide?(p.team==='left'?-0.55:Math.PI+0.55):win?(p.team==='left'?-1.25:Math.PI+1.25):p.angle+(p.sway||0),dx=Math.cos(a),dy=Math.sin(a),nx=-dy,ny=dx;
     const sx=lean+f*1,sy=-37,bx=sx+dx*16,by=sy+dy*16,bend=pdraw*5;
     const t1x=bx+nx*19-dx*(6+bend),t1y=by+ny*19-dy*(6+bend),t2x=bx-nx*19-dx*(6+bend),t2y=by-ny*19-dy*(6+bend);
-    const pull=6+bend+pdraw*16,nkx=bx-dx*pull,nky=by-dy*pull;
+    const twang=p.twangT>0?Math.sin(S.time*80)*p.twangT*8:0; // тетива дрожит после выстрела
+    const pull=6+bend+pdraw*16+twang,nkx=bx-dx*pull,nky=by-dy*pull;
     ctx.strokeStyle=p.color;ctx.lineWidth=3.5;line(sx,sy,bx,by);
+    // лук с загнутыми концами (рекурсивный) и кожаной рукоятью
     ctx.strokeStyle='#7a4a22';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(t1x,t1y);ctx.quadraticCurveTo(bx+dx*7,by+dy*7,t2x,t2y);ctx.stroke();
+    ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(t1x,t1y);ctx.lineTo(t1x+dx*3+nx*2,t1y+dy*3+ny*2);ctx.moveTo(t2x,t2y);ctx.lineTo(t2x+dx*3-nx*2,t2y+dy*3-ny*2);ctx.stroke();
+    ctx.strokeStyle='#3b2716';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(bx+dx*2+nx*3,by+dy*2+ny*3);ctx.lineTo(bx+dx*2-nx*3,by+dy*2-ny*3);ctx.stroke();
     ctx.strokeStyle='#eee';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(t1x,t1y);ctx.lineTo(nkx,nky);ctx.lineTo(t2x,t2y);ctx.stroke();
     const ex=(sx-f*1+nkx)/2,ey=(sy+1+nky)/2-4;
     ctx.strokeStyle=p.color;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(sx-f*1,sy+1);ctx.lineTo(ex,ey);ctx.lineTo(nkx,nky);ctx.stroke();
@@ -1773,8 +2043,15 @@ function drawPreview(p){
 }
 function hpBar(x,y,w,h,a){
   ctx.fillStyle='#2a3247';rr(x,y,w,h,h/2);ctx.fill();
-  const k=clamp(a.hpShow/HP_MAX,0,1);
-  if(k>0.01){ctx.fillStyle=k>0.5?'#2fb36d':k>0.25?'#f1c40f':'#e74c3c';rr(x,y,Math.max(h,w*k),h,h/2);ctx.fill()}
+  const k=clamp(a.hpShow/HP_MAX,0,1),kg=clamp((a.hpGhost==null?a.hpShow:a.hpGhost)/HP_MAX,0,1);
+  // «призрак» потерянного здоровья тает чуть позже — видно, сколько сняли
+  if(kg>k+0.004){ctx.fillStyle='rgba(255,236,200,.8)';rr(x,y,Math.max(h,w*kg),h,h/2);ctx.fill()}
+  if(k>0.01){
+    const c=k>0.5?['#4fd884','#21955a']:k>0.25?['#f7d84f','#d3a312']:['#f2685b','#bf3328'];
+    const g=ctx.createLinearGradient(0,y,0,y+h);g.addColorStop(0,c[0]);g.addColorStop(1,c[1]);
+    ctx.fillStyle=g;rr(x,y,Math.max(h,w*k),h,h/2);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.25)';rr(x+2,y+1,Math.max(0,w*k-4),h*0.36,h*0.18);ctx.fill();
+  }
 }
 // Панель команды: для одного бойца — крупная полоса, для двух — по строке на каждого
 function teamPanel(team,right){
@@ -1785,6 +2062,7 @@ function teamPanel(team,right){
     const p=list[0],h=60;
     ctx.fillStyle='rgba(15,20,34,.72)';rr(x,0,w,h,10);ctx.fill();
     if(S.turn===p.id&&!S.over){ctx.strokeStyle=p.color;ctx.lineWidth=2.5;rr(x,0,w,h,10);ctx.stroke()}
+    if(p.hp>0&&p.hp<=25&&!S.over){ctx.strokeStyle='rgba(240,80,70,'+(0.45+0.4*Math.sin(S.time*6))+')';ctx.lineWidth=2;rr(x,0,w,h,10);ctx.stroke()}
     ctx.font='bold 16px Segoe UI,Arial';ctx.fillStyle=p.color;ctx.textAlign=right?'right':'left';
     ctx.fillText(nameOf(p.id),right?x+w-12:x+12,22);
     ctx.font='13px Segoe UI,Arial';ctx.fillStyle='#cfd6e6';ctx.textAlign=right?'left':'right';
@@ -1857,52 +2135,79 @@ function drawHUD(){
   }
 }
 function draw(){
-  // встряска: всё поле, кроме панелей, слегка дёргается
-  const sh=S.shake,ox=sh?(Math.random()-0.5)*sh:0,oy=sh?(Math.random()-0.5)*sh:0;
-  ctx.setTransform(RS,0,0,RS,ox*RS,oy*RS);
+  // встряска и кинокамера: двигается всё поле, кроме панелей
+  const sh=S.shake*(SETTINGS.shake==null?1:+SETTINGS.shake),ox=sh?(Math.random()-0.5)*sh:0,oy=sh?(Math.random()-0.5)*sh:0;
+  const z=CAM.z,tx=W/2-CAM.x*z+ox,ty=H/2-CAM.y*z+oy;
+  ctx.setTransform(RS*z,0,0,RS*z,tx*RS,ty*RS);
   ctx.drawImage(bgSky,0,0,W,H);
+  drawStars();
   for(const c of S.clouds)drawCloud(c);
+  drawStreaks();
   ctx.drawImage(bgLand,0,0,W,H);
+  drawRays();
   drawWeatherBack();
   drawWater();drawPosts();
   for(const t of trees)drawTree(t);
   const c=cur();
   if(S.state==='aim'&&!S.over&&!c.dead&&iControl(c)&&ctrlOf(c)==='human')drawMoveZone(c);
+  if(S.state==='aim'&&!S.over&&!c.dead&&ctrlOf(c)==='human')drawGhost(c);
   for(const a of S.arrows)if(a.state==='stuck')drawArrowShape(a.x,a.y,a.ang,arrowColor(a.owner),{noHead:true,start:5});
   for(const p of S.archers)if(p.dead)drawArcher(p);
   for(const p of S.archers)if(!p.dead)drawArcher(p);
   for(const r of rocks)drawRock(r);   // камень и куст — перед лучником
   for(const b of bushes)drawBush(b);
+  drawBlades();
+  drawAmbient();
   for(const b of S.birds)drawBird(b);
   for(const c of S.crates)drawCrate(c);
+  drawTargets();
   for(const a of S.arrows){
     if(a.state!=='fly')continue;
-    for(let i=0;i<a.trail.length;i++){ctx.fillStyle='rgba(255,255,255,'+(i/a.trail.length*0.5)+')';ctx.fillRect(a.trail[i].x-1,a.trail[i].y-1,2,2)}
+    // шлейф — сужающаяся лента; у огненной стрелы — раскалённый
+    const tr=a.trail,n=tr.length;
+    ctx.lineCap='round';
+    for(let i=1;i<n;i++){
+      const k=i/n;
+      ctx.strokeStyle=a.type==='fire'?'rgba(255,170,80,'+(k*0.65)+')':'rgba(255,255,255,'+(k*0.42)+')';
+      ctx.lineWidth=0.6+k*2.4;ctx.beginPath();ctx.moveTo(tr[i-1].x,tr[i-1].y);ctx.lineTo(tr[i].x,tr[i].y);ctx.stroke();
+    }
     drawArrowShape(a.x,a.y,a.ang,arrowColor(a.owner),{type:a.type});
   }
   for(const p of S.parts){
-    ctx.globalAlpha=clamp(p.life/p.max,0,1);ctx.fillStyle=p.color;
+    const k=clamp(p.life/p.max,0,1);
+    if(p.kind==='ring'){ctx.globalAlpha=k;ctx.strokeStyle=p.color;ctx.lineWidth=3*k+0.5;ctx.beginPath();ctx.arc(p.x,p.y,(1-k)*p.size+3,0,7);ctx.stroke();continue}
+    ctx.globalAlpha=k;ctx.fillStyle=p.color;
     if(p.kind==='dot'){ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,7);ctx.fill()}
     else{ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.beginPath();ctx.ellipse(0,0,p.size*1.6,p.size*0.6,0,0,7);ctx.fill();ctx.restore()}
   }
   ctx.globalAlpha=1;
+  drawGrade();
   drawWeatherFront();
   if(isHumanTurn()&&c.draw>0)drawPreview(c);
   for(const t of S.texts){
-    ctx.globalAlpha=clamp(t.life,0,1);ctx.font='bold '+Math.round(t.size*UI)+'px Segoe UI,Arial';ctx.textAlign='center';
+    // всплывающие надписи появляются с «пружинкой»
+    const age=1.6-t.life,pop=age<0.2?0.55+0.45*easeOutBack(age/0.2):1;
+    ctx.globalAlpha=clamp(t.life,0,1);ctx.font='bold '+Math.round(t.size*UI*pop)+'px Segoe UI,Arial';ctx.textAlign='center';
     ctx.lineWidth=4;ctx.strokeStyle='rgba(0,0,0,.5)';ctx.strokeText(t.text,t.x,t.y);
     ctx.fillStyle=t.color;ctx.fillText(t.text,t.x,t.y);
   }
   ctx.globalAlpha=1;
   for(const p of S.archers)drawEmote(p);
   ctx.setTransform(RS,0,0,RS,0,0);
-  drawHUD();
+  if(HQ())drawVignette();
+  if(mode!=='demo'){drawHUD();drawIntro();drawCoach()}
 }
+function easeOutBack(x){const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)}
 let lastT=0;
 function frame(ts){
   let dt=lastT?Math.min(0.05,(ts-lastT)/1000):0;lastT=ts;
   if(S&&$('game').classList.contains('active')){
-    if(S.slowT>0){S.slowT-=dt;dt*=0.3} // замедление после попадания в голову / добивания
+    const real=dt;
+    if(PAUSED)dt=0;
+    else if(S.hitStop>0){S.hitStop-=real;dt=0}   // стоп-кадр в момент попадания
+    else if(S.slowT>0){S.slowT-=dt;dt*=0.3}      // замедление после попадания в голову / добивания
+    if(S.intro&&!PAUSED)S.intro.t-=real;
+    updateCam(real);
     update(dt);draw();
   }
   requestAnimationFrame(frame);
@@ -1928,6 +2233,7 @@ function sfx(n){
     case'clang':tone(880,0.18,'square',0.08,-200);tone(1320,0.12,'triangle',0.06,0);break;
     case'crate':[660,880,1100].forEach((f,i)=>setTimeout(()=>{try{tone(f,0.12,'triangle',0.14,0)}catch(e){}},i*70));break;
     case'pop':tone(520,0.07,'sine',0.12,260);break;
+    case'horn':tone(196,0.55,'sawtooth',0.05,0);tone(294,0.55,'triangle',0.08,0);setTimeout(()=>{try{tone(392,0.7,'triangle',0.09,0);tone(262,0.7,'sawtooth',0.04,0)}catch(e){}},260);break;
     case'win':[523,659,784].forEach((f,i)=>setTimeout(()=>{try{tone(f,0.25,'triangle',0.18,0)}catch(e){}},i*140));break;
   }}catch(e){}
 }
