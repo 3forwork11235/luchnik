@@ -37,6 +37,13 @@ label.chk input{width:20px;height:20px}
 .rules{color:var(--muted);font-size:14px;line-height:1.55;margin:0;padding-left:18px}
 .rules b{color:var(--text)}
 #netStatus{color:var(--muted);font-size:13px;margin-top:8px;min-height:16px;word-break:break-word}
+#netStatus.busy,#netStatus.bad{font-size:15px;font-weight:600;padding:12px 14px;border-radius:12px;display:flex;gap:10px;align-items:center}
+#netStatus.busy{color:#ffe7a8;background:rgba(255,207,74,.10);border:1px solid rgba(255,207,74,.4)}
+#netStatus.busy::before{content:'';width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(255,207,74,.3);border-top-color:#ffcf4a;animation:spin .8s linear infinite;flex:none}
+#netStatus.bad{color:#ffb3a8;background:rgba(224,80,59,.10);border:1px solid rgba(224,80,59,.4)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.joinq{display:flex;gap:8px;justify-content:center;align-items:center;margin:0 auto 14px;max-width:440px}
+.joinq input{flex:1;min-width:0;text-transform:uppercase;text-align:center;letter-spacing:.2em;background:rgba(16,22,38,.8)}
 #serverInfo{color:var(--muted);font-size:13px;margin-bottom:10px}
 #gameIdBox{font-size:clamp(28px,8vw,40px);letter-spacing:5px;color:var(--gold);font-weight:800;background:#11182a;padding:10px 20px;border-radius:12px;display:inline-block;margin:6px 0}
 #joinLink{font-size:15px;background:#11182a;border-radius:10px;padding:10px 12px;margin:8px auto;max-width:560px;word-break:break-all;-webkit-user-select:all;user-select:all}
@@ -184,6 +191,10 @@ input[type=range]{width:100%;accent-color:#ffcf4a;height:24px}
   </nav>
 
   <section class="tab" id="tab-play">
+    <div class="joinq">
+      <input type="text" id="joinId2" placeholder="Код от друга" maxlength="6" autocapitalize="characters" autocorrect="off" spellcheck="false" onkeydown="if(event.key==='Enter')quickJoin()">
+      <button class="btn b-blue" onclick="quickJoin()">🔗 Войти в игру</button>
+    </div>
     <div class="modes">
       <button class="mode m-ai" onclick="startLocal('ai')"><span class="mi">🤖</span><span class="mt"><b>Против ИИ</b><small>Дуэль с компьютером</small></span></button>
       <button class="mode m-2p" onclick="startLocal('2p')"><span class="mi">👥</span><span class="mt"><b>Вдвоём</b><small>По очереди на одном устройстве</small></span></button>
@@ -2130,7 +2141,7 @@ function updateQuick(){
 }
 function initMenuUi(){
   document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{setTab(b.dataset.tab);audioInit();uiClick()}));
-  setTab(lsGet('archer_tab')||'play');
+  setTab(JOIN_PENDING||NET.token?'online':(lsGet('archer_tab')||'play'));
   document.querySelectorAll('#tab-setup select,#tab-setup input').forEach(el=>el.addEventListener('change',()=>{readOpts();updateQuick()}));
   const bind=(id,key,conv)=>{const el=$(id);el.addEventListener(el.type==='range'?'input':'change',()=>{SETTINGS[key]=conv(el.type==='checkbox'?el.checked:el.value);saveSettings();applySettings(key)})};
   bind('pfGfx','gfx',v=>v);bind('pfTod','tod',v=>v);bind('pfShake','shake',v=>+v);
@@ -2925,7 +2936,37 @@ if(SERVED){
     if(!NET.conn&&!NET.token)setVia(lsGet('archer_via')||'ws');else setVia(NET.via);
   }).catch(()=>{});
 }
-function netStatus(t){$('netStatus').textContent=t}
+// Статус связи. Пока идёт подключение — заметная плашка с «крутилкой» на вкладке «Онлайн»
+function netStatus(t){
+  const el=$('netStatus'),busy=/…$/.test(t||'');
+  el.textContent=t;el.classList.toggle('busy',busy);el.classList.toggle('bad',/^❌|^⚠/.test(t||''));
+  if(t&&$('menu').classList.contains('active'))setTab('online');
+}
+// Ссылка-приглашение: …/#p2p=ABC123 — P2P, http://адрес:8765/#ABC123 — через server.py.
+// Срабатывает и при открытии страницы, и когда игра уже открыта (тогда меняется только «#…» в адресе).
+let JOIN_PENDING=false;
+function joinFromHash(){
+  const h=decodeURIComponent(location.hash.slice(1)).trim().toUpperCase();
+  const p2p=/^P2P=([A-Z0-9]{6})$/.exec(h);
+  if(!(p2p||(SERVED&&/^[A-Z0-9]{6}$/.test(h))))return false;
+  history.replaceState(null,'',location.pathname+location.search);
+  const id=p2p?p2p[1]:h;
+  if(NET.gameId===id&&NET.conn)return true; // уже в этой игре
+  if(S&&mode!=='demo'){S=null;$('over').classList.remove('show');show('menu')} // бросаем текущую партию ради приглашения
+  if(p2p)setVia('p2p');else{PY_SERVER=true;setVia('ws')}
+  $('joinId').value=id;JOIN_PENDING=true;
+  netJoin();
+  quietToast('🔗 Подключаемся к игре '+id+'…');
+  return true;
+}
+addEventListener('hashchange',()=>{joinFromHash()});
+// Войти по коду прямо с главной вкладки
+function quickJoin(){
+  const v=$('joinId2').value.trim().toUpperCase();
+  if(!/^[A-Z0-9]{6}$/.test(v)){$('joinId2').focus();quietToast('Введите код игры из 6 символов');return}
+  $('joinId').value=v;audioInit();netJoin();
+}
+function quietToast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3500)}
 function saveServer(){const v=$('serverIp').value.trim();if(!v)return;serverIp=v;lsSet('archer_server_ip',v);netStatus('Адрес сохранён: '+wsUrl())}
 function netOnline(){return !!(NET.conn&&NET.conn.readyState===1)}
 function netSend(o){if(netOnline()){try{NET.conn.send(o);return true}catch(e){}}return false}
@@ -3464,15 +3505,8 @@ function netNotice(){
 }
 
 (function(){
-  // Открыли ссылку-приглашение — сразу входим в игру:
-  //   …/#p2p=ABC123 — P2P,  http://адрес:8765/#ABC123 — через server.py
-  const h=decodeURIComponent(location.hash.slice(1)).trim().toUpperCase();
-  const p2p=/^P2P=([A-Z0-9]{6})$/.exec(h);
-  if(p2p||(SERVED&&/^[A-Z0-9]{6}$/.test(h))){
-    history.replaceState(null,'',location.pathname+location.search);
-    if(p2p)setVia('p2p');else{PY_SERVER=true;setVia('ws')}
-    $('joinId').value=p2p?p2p[1]:h;netJoin();return;
-  }
+  // Открыли ссылку-приглашение — сразу входим в игру
+  if(joinFromHash())return;
   // Вкладку перезагрузили посреди игры — возвращаемся в неё
   const s=loadSession();
   if(!s)return;
