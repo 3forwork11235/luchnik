@@ -212,6 +212,7 @@ const WIND_MAX=6;        // м/с
 const HP_MAX=100;
 const SHOULDER=37;
 const TREE_KEEP=34;      // ближе к стволу дерева встать нельзя
+const TREE_GAP=70;       // дерево ставится перед лучником не ближе этого (иначе крона нависает над ним)
 const MATE_KEEP=26;      // и вплотную к союзнику тоже
 const CROWN_BLOCK=0.3;   // шанс, что крона остановит стрелу; иначе стрела пролетает сквозь листву, теряя скорость
 const TREE_HP=80;        // прочность дерева исходного размера (растёт вместе с деревом)
@@ -257,7 +258,7 @@ let ground=new Float32Array(W+1), trees=[], waterL=0, waterR=0, bgSky=null, bgLa
 // ================= Мир =================
 function groundAt(x){if(x<=0)return ground[0];if(x>=W)return ground[W];const i=x|0,f=x-i;return ground[i]*(1-f)+ground[i+1]*f}
 
-function buildWorld(seed,treesOpt){
+function buildWorld(seed,treesOpt,active){
   const r=mulberry32(seed);
   const p1=r()*6.28,p2=r()*6.28,p3=r()*6.28,a1=12+r()*16,a2=5+r()*9,a3=2+r()*4;
   for(let x=0;x<=W;x++){
@@ -269,15 +270,30 @@ function buildWorld(seed,treesOpt){
   for(let x=0;x<=W;x++)if(ground[x]>WATER_Y){waterL=Math.min(waterL,x);waterR=Math.max(waterR,x)}
   const sp={L0:120+r()*60,L1:300+r()*60};
   sp.R0=W-(120+r()*60);sp.R1=W-(300+r()*60);
+  // Деревья ставим только ПЕРЕД лучниками (между ними и рекой), иначе укрытие бессмысленно.
+  // Сквозь дерево пройти нельзя, так что оно останется впереди до конца раунда (пока не срубят).
+  // Считаем в «отражённых» координатах u: 0 — свой край поля, растёт к реке; для правых u = W − x.
   trees=[];
   const per=treesOpt==='many'?2:treesOpt==='few'?1:0;
+  const ids=active&&active.length?active:['L0','R0'];
   for(const side of ['left','right']){
-    const [a,b]=TERR[side],spawns=side==='left'?[sp.L0,sp.L1]:[sp.R0,sp.R1];let tries=0;
-    while(trees.filter(t=>t.side===side).length<per&&tries++<80){
-      const x=a+30+r()*(b-a-60);
-      if(spawns.some(s=>Math.abs(x-s)<TREE_KEEP+24)||trees.some(t=>Math.abs(t.x-x)<100))continue;
-      const h=48+r()*30,cr=22+r()*10,tw=9+r()*4;
-      trees.push({side,x,base:groundAt(x)+2,h0:h,cr0:cr,tw0:tw,h,cr,tw,k:1,kShow:1,dmg:0,felled:false,fallT:0,fallDir:1,seed:r()*100});
+    const mir=v=>side==='left'?v:W-v;
+    const us=ids.filter(id=>teamOf(id)===side).map(id=>mir(sp[id])).sort((p,q)=>p-q); // от тыла к реке
+    // зоны «перед лучником»: перед передним — до реки, перед задним — до союзника
+    const zones=[];
+    for(let k=us.length-1;k>=0;k--){
+      const lo=us[k]+TREE_GAP,hi=k===us.length-1?TERR.left[1]-15:us[k+1]-TREE_KEEP-24;
+      if(hi>lo)zones.push([lo,hi]);
+    }
+    let placed=0;
+    for(const [lo,hi] of zones){
+      for(let tries=0;placed<per&&tries<40;tries++){
+        const u=lo+r()*(hi-lo);
+        if(trees.some(t=>t.side===side&&Math.abs(mir(t.x)-u)<100))continue;
+        const x=mir(u),h=48+r()*30,cr=22+r()*10,tw=9+r()*4;
+        trees.push({side,x,base:groundAt(x)+2,h0:h,cr0:cr,tw0:tw,h,cr,tw,k:1,kShow:1,dmg:0,felled:false,fallT:0,fallDir:1,seed:r()*100});
+        placed++;
+      }
     }
   }
   renderBg(r);
@@ -395,7 +411,7 @@ function iControl(a){const c=ctrlOf(a);return c==='human'||c==='ai'}
 function birdAuthority(){return mode!=='online'||NET.leader===NET.slot}
 
 function newMatch(cfg){
-  const sp=buildWorld(cfg.seed,cfg.opts.trees);
+  const sp=buildWorld(cfg.seed,cfg.opts.trees,cfg.active);
   const ids=cfg.active;
   S={seed:cfg.seed,opts:cfg.opts,score:cfg.score||{left:0,right:0},
     archers:ids.map(id=>makeArcher(id,sp[id],(cfg.names&&cfg.names[id])||defaultName(id,ids))),by:{},
