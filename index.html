@@ -42,6 +42,7 @@ label.chk input{width:20px;height:20px}
 #netStatus.busy::before{content:'';width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(255,207,74,.3);border-top-color:#ffcf4a;animation:spin .8s linear infinite;flex:none}
 #netStatus.bad{color:#ffb3a8;background:rgba(224,80,59,.10);border:1px solid rgba(224,80,59,.4)}
 @keyframes spin{to{transform:rotate(360deg)}}
+.hostwarn{color:#ffe7a8;background:rgba(255,207,74,.10);border:1px solid rgba(255,207,74,.4);border-radius:12px;padding:10px 12px;font-size:14px;max-width:440px;margin:10px auto}
 .joinq{display:flex;gap:8px;justify-content:center;align-items:center;margin:0 auto 14px;max-width:440px}
 .joinq input{flex:1;min-width:0;text-transform:uppercase;text-align:center;letter-spacing:.2em;background:rgba(16,22,38,.8)}
 #serverInfo{color:var(--muted);font-size:13px;margin-bottom:10px}
@@ -333,6 +334,7 @@ input[type=range]{width:100%;accent-color:#ffcf4a;height:24px}
     <div id="joinLink"></div>
     <button class="btn" onclick="copyLink()" id="btnCopy">📋 Копировать ссылку</button>
   </div>
+  <p id="hostWarn" class="hostwarn" style="display:none">📱 Ваше устройство — сервер игры. Отправили ссылку — сразу возвращайтесь сюда и не сворачивайте браузер, пока друзья не подключатся: иначе они не смогут войти.</p>
   <div id="slotList"></div>
   <p id="lobbyHint" class="muted"></p>
   <div class="row" style="justify-content:center">
@@ -3155,6 +3157,19 @@ function hostAccept(dc){
   const gone=()=>{if(sess){const s=sess;sess=null;s.closed()}};
   dc.on('close',gone);dc.on('error',gone);
 }
+// Хост вернулся в браузер (или проверка по таймеру): регистрация у сервера знакомств могла отвалиться,
+// пока страница спала. Тогда переподключаемся, а если «пир» уничтожен — регистрируемся заново под тем же кодом.
+let healing=false;
+function hostHeal(){
+  const L=HOST.listener;
+  if(!L||!L.peer||NET.via!=='p2p'||healing)return;
+  const p=L.peer;
+  if(p.destroyed){
+    healing=true;
+    peerListen(HOST.gid).then(nl=>{healing=false;if(HOST.listener===L)HOST.listener=nl;else nl.destroy()},()=>{healing=false});
+  }else if(p.disconnected){try{p.reconnect()}catch(e){}}
+}
+setInterval(()=>{if(!document.hidden)hostHeal()},5000);
 function hostSetup(listener,gid,snap){
   HOST.listener=listener;HOST.gid=gid;
   HOST.hub=new ArcherHub({
@@ -3225,7 +3240,7 @@ const SESS_KEY='archer_session';
 function saveSession(){lsSet(SESS_KEY,JSON.stringify({gid:NET.gameId,slot:NET.slot,token:NET.token,via:NET.via,host:NET.host,ws:NET.via==='ws'?wsUrl():null,ts:Date.now()}))}
 function loadSession(){try{const s=JSON.parse(lsGet(SESS_KEY)||'null');return s&&s.slot&&Date.now()-s.ts<6*3600e3?s:null}catch(e){return null}}
 function clearSession(){
-  NET.token=null;NET.gameId=null;NET.host=false;NET.retry=0;NET.slots={};NET.leader=null;NET.started=false;NET.err=null;
+  NET.token=null;NET.gameId=null;NET.host=false;NET.retry=0;NET.slots={};NET.leader=null;NET.started=false;NET.err=null;NET.joinFirst=null;
   if(NET.rtimer){clearTimeout(NET.rtimer);NET.rtimer=null}
   lsDel(SESS_KEY);
 }
@@ -3253,12 +3268,23 @@ function lostText(){
   if(NET.err==='no-lib')return'❌ Не удалось загрузить модуль связи — нужен интернет.';
   const code=' (код: '+(NET.err||'closed')+(hasTurn()?'':', без TURN')+')';
   if(/^ice-|timeout|negotiation/.test(NET.err||''))
-    return'❌ Игра найдена, но сеть не пропустила соединение между устройствами.'+(hasTurn()?' Попробуйте другую сеть (например, Wi-Fi вместо мобильного интернета).':' Нужен ретранслятор (TURN) — он ещё не настроен.')+code;
+    return'❌ Игра найдена, но соединиться не вышло. Попросите создателя игры держать игру открытой на экране (не сворачивать браузер) и нажмите «Войти» ещё раз.'+(hasTurn()?' Если не поможет — переключите одно из устройств между Wi-Fi и мобильным интернетом.':' Нужен ретранслятор (TURN) — он ещё не настроен.')+code;
   if(/network|server-error|socket|no-signal/.test(NET.err||''))return'❌ Нет связи с сервером знакомств (PeerJS) — проверьте интернет.'+code;
   return'❌ Не удалось соединиться с создателем игры. Нужен интернет; если не помогает — попробуйте другую сеть.'+code;
 }
+// Вход в игру не удался. Частая причина — у создателя игры браузер свёрнут (он, например, отправлял ссылку
+// в мессенджере), и его телефон-«сервер» на это время замер. Поэтому не сдаёмся сразу, а пробуем ещё несколько раз.
+const JOIN_WAIT=75000; // сколько ждём создателя игры, мс
 function socketLost(){
   if(NET.token&&NET.gameId){scheduleReconnect();return}
+  const first=NET.joinFirst,seq=NET.createSeq;
+  if(first&&Date.now()-NET.joinStart<JOIN_WAIT&&/^ice-|timeout|negotiation|closed|dc-error|peer-unavailable|no-signal|network|server-error|socket/.test(NET.err||'')){
+    NET.joinTries++;
+    netStatus('Создатель игры пока не отвечает — пробуем снова (попытка '+(NET.joinTries+1)+'). Попросите его открыть игру на экране…');
+    setTimeout(()=>{if(seq===NET.createSeq&&!NET.conn&&!NET.token&&NET.joinFirst===first)openSocket(first)},2500);
+    return;
+  }
+  NET.joinFirst=null;
   netStatus(lostText());
   if($('lobby').classList.contains('active'))show('menu');
 }
@@ -3319,7 +3345,7 @@ function finishOwnFlight(){
 }
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){finishOwnFlight();if(S&&mode!=='online'&&mode!=='demo'&&!S.over)pauseOpen()} // свернули игру на одном устройстве — ставим паузу
-  else{resumeNow();if(NET.conn)keepAwake()}
+  else{resumeNow();hostHeal();if(NET.conn)keepAwake()}
 });
 addEventListener('pagehide',finishOwnFlight);
 addEventListener('pageshow',resumeNow);
@@ -3352,7 +3378,9 @@ function netCreate(){
 function netJoin(){
   const id=$('joinId').value.trim().toUpperCase();
   if(!/^[A-Z0-9]{6}$/.test(id)){netStatus('Введите ID игры из 6 символов');return}
-  netConnect({action:'join_game',game_id:id,name:myName(),skin:mySkin()});
+  const first={action:'join_game',game_id:id,name:myName(),skin:mySkin()};
+  netConnect(first);
+  NET.joinFirst=first;NET.joinTries=0;NET.joinStart=Date.now();
 }
 function inviteLink(){
   if(!SERVED||!NET.gameId)return null;
@@ -3406,6 +3434,7 @@ function renderLobby(){
     st.textContent=s.kind==='empty'?'ждём':s.kind==='bot'&&!s.away?'🤖 бот':s.online?'✅ на месте':'⏸ отошёл';
     row.append(dot,nm,st);$('slotList').append(row);
   }
+  $('hostWarn').style.display=NET.host&&NET.via==='p2p'?'':'none';
   const leader=NET.leader===NET.slot,free=ids.filter(i=>NET.slots[i].kind==='empty').length;
   $('btnStart').style.display=leader?'':'none';
   $('lobbyHint').textContent=free?
@@ -3448,7 +3477,7 @@ function handleResumed(m){
 function onNet(m){
   switch(m.type){
     case'joined':
-      NET.slot=m.slot;NET.gameId=m.game_id;NET.token=m.token;NET.lan=m.lan||NET.lan;saveSession();break;
+      NET.slot=m.slot;NET.gameId=m.game_id;NET.token=m.token;NET.lan=m.lan||NET.lan;NET.joinFirst=null;saveSession();break;
     case'lobby':
       NET.size=m.size;NET.bots=m.bots;NET.gameId=m.game_id;applySlots(m);
       if(!$('lobby').classList.contains('active')){renderLobby();show('lobby')}
