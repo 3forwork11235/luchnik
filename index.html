@@ -132,6 +132,7 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
       <li>Реку переходить нельзя. На стрелу действуют гравитация, сопротивление воздуха и <b>ветер</b> (флажки у реки показывают его направление).</li>
       <li>Попадание в голову даёт крит, в корпус — обычный урон, в ноги — слабый. Своих тоже можно ранить!</li>
       <li><b>Деревья</b> прикрывают лишь частично: ствол останавливает стрелу, а сквозь крону она чаще пролетает, теряя скорость. Вплотную к дереву встать нельзя.</li>
+      <li>Деревья <b>можно срубить</b>: каждая стрела в стволе или застрявшая в кроне ранит дерево (ствол — сильнее). Но каждый ход деревья понемногу растут (до 1,5 раза) и становятся крепче.</li>
       <li><b>Птицы</b> могут поймать стрелу. Сбитая птица лечит стрелка: голубь +5, утка +8, гусь +12.</li>
       <li><b>2 на 2 онлайн:</b> до 4 игроков. Если кого-то не хватает или игрок ушёл, за него играет бот (если включено). Новый игрок может занять место бота по ссылке.</li>
     </ul>
@@ -213,6 +214,10 @@ const SHOULDER=37;
 const TREE_KEEP=34;      // ближе к стволу дерева встать нельзя
 const MATE_KEEP=26;      // и вплотную к союзнику тоже
 const CROWN_BLOCK=0.3;   // шанс, что крона остановит стрелу; иначе стрела пролетает сквозь листву, теряя скорость
+const TREE_HP=80;        // прочность дерева исходного размера (растёт вместе с деревом)
+const TREE_DMG={trunk:34,crown:16}; // урон дереву: стрела в стволе / застряла в кроне (как у лучника, зависит от скорости)
+const TREE_GROW=0.02;    // за каждый ход дерево подрастает на 2% исходного размера…
+const TREE_GROW_MAX=0.5; // …но не больше чем в полтора раза
 const SLOT_ORDER=['L0','R0','L1','R1'];
 const teamOf=id=>id[0]==='L'?'left':'right';
 const ARCHER_COL={L0:['#3b8fe0','#1f5a99'],L1:['#3fb3d6','#1d6f8f'],R0:['#e0503b','#9b2d1f'],R1:['#e5893a','#9c5216']};
@@ -271,11 +276,51 @@ function buildWorld(seed,treesOpt){
     while(trees.filter(t=>t.side===side).length<per&&tries++<80){
       const x=a+30+r()*(b-a-60);
       if(spawns.some(s=>Math.abs(x-s)<TREE_KEEP+24)||trees.some(t=>Math.abs(t.x-x)<100))continue;
-      trees.push({side,x,base:groundAt(x)+2,h:48+r()*30,cr:22+r()*10,tw:9+r()*4,seed:r()*100});
+      const h=48+r()*30,cr=22+r()*10,tw=9+r()*4;
+      trees.push({side,x,base:groundAt(x)+2,h0:h,cr0:cr,tw0:tw,h,cr,tw,k:1,kShow:1,dmg:0,felled:false,fallT:0,fallDir:1,seed:r()*100});
     }
   }
   renderBg(r);
   return sp;
+}
+
+// ================= Деревья: рост и разрушение =================
+// Размер дерева зависит только от номера хода, урон приходит в результатах выстрелов —
+// поэтому у всех игроков деревья одинаковые.
+function treeMaxHp(t){return Math.round(TREE_HP*t.k)}
+function setTreeTurns(n,instant){
+  const k=1+Math.min(TREE_GROW_MAX,TREE_GROW*(n||0));
+  for(const t of trees){
+    t.k=k;t.h=t.h0*k;t.cr=t.cr0*k;t.tw=t.tw0*k;
+    if(instant)t.kShow=k;
+  }
+}
+function fellTree(i,dir,instant){
+  const t=trees[i];
+  if(!t||t.felled)return;
+  t.felled=true;t.fallT=instant?1:0;t.fallDir=dir||(t.side==='left'?-1:1);
+  for(const a of S.arrows)if(a.treeIdx===i&&a.state==='stuck')a.state='gone';
+  if(instant)return;
+  burst(t.x,t.base-t.h*0.6,22,'#4c8f3a',150,120,3.5,'leaf');
+  burst(t.x,t.base-8,12,'#8a6440',130,500,2.5,'dot');
+  addText(t.x,t.base-t.h-t.cr*1.2,'Дерево срублено!','#ffcf4a',22);
+  sfx('thud');
+}
+// Состояние деревьев от комнаты (при входе в игру и после каждого хода)
+function syncTrees(st,turnNo,instant){
+  if(turnNo!=null)setTreeTurns(turnNo,instant);
+  if(!st)return;
+  for(const i in st){
+    const t=trees[i];if(!t)continue;
+    t.dmg=st[i].dmg||0;
+    if(st[i].felled)fellTree(+i,0,instant);
+  }
+}
+function updateTrees(dt){
+  for(const t of trees){
+    t.kShow+=(t.k-t.kShow)*Math.min(1,dt*1.5);
+    if(t.felled&&t.fallT<1)t.fallT=Math.min(1,t.fallT+dt*1.1);
+  }
 }
 
 function renderBg(r){
@@ -356,8 +401,9 @@ function newMatch(cfg){
     archers:ids.map(id=>makeArcher(id,sp[id],(cfg.names&&cfg.names[id])||defaultName(id,ids))),by:{},
     lastIdx:{left:-1,right:-1},arrows:[],birds:[],parts:[],texts:[],clouds:makeClouds(),birdTimer:rnd(2,4),birdSeq:0,
     time:0,banner:null,state:'aim',over:false,winner:null,overT:0,pending:null,flying:null,ai:null,
-    turn:null,wind:0,netT:0,netLast:'',blockT:0,disconnected:false,unsentResult:null};
+    turn:null,wind:0,netT:0,netLast:'',blockT:0,disconnected:false,unsentResult:null,turnNo:cfg.turnNo||0};
   for(const a of S.archers)S.by[a.id]=a;
+  syncTrees(cfg.trees,S.turnNo,true);
   $('over').classList.remove('show');
   input.drawing=false;
   if(S.opts.birds&&birdAuthority()){
@@ -466,7 +512,7 @@ function moveRange(a){
   let lo=Math.max(A,a.turnX-MOVE_MAX),hi=Math.min(B,a.turnX+MOVE_MAX);
   let loWhy=a.turnX-MOVE_MAX>A?'budget':'edge',hiWhy=a.turnX+MOVE_MAX<B?'budget':'edge';
   const obs=[];
-  for(const t of trees)if(t.side===a.team)obs.push({x:t.x,k:TREE_KEEP,why:'tree'});
+  for(const t of trees)if(t.side===a.team&&!t.felled)obs.push({x:t.x,k:TREE_KEEP,why:'tree'});
   for(const m of S.archers)if(m!==a&&m.team===a.team&&!m.dead)obs.push({x:m.x,k:MATE_KEEP,why:'mate'});
   for(const o of obs){
     if(o.x>=a.x){if(o.x-o.k<hi){hi=o.x-o.k;hiWhy=o.why}}
@@ -536,13 +582,19 @@ function collide(a){
   const gy=groundAt(x);
   if(y>=WATER_Y&&x>waterL&&x<waterR&&gy>WATER_Y)return Object.assign(base,{kind:'water'});
   if(y>=gy)return Object.assign(base,{kind:'ground',y:gy+2});
+  // попадание в дерево ранит его; кто добил — тот и срубил
+  const treeHit=(i,part)=>{
+    const t=trees[i],dmg=Math.round(TREE_DMG[part]*clamp(Math.hypot(a.vx,a.vy)/20,0.6,1.3));
+    return Object.assign(base,{kind:'tree',tree:i,tdmg:dmg,felled:t.dmg+dmg>=treeMaxHp(t)});
+  };
   for(let i=0;i<trees.length;i++){
     const t=trees[i];
-    if(trunkHit(t,x,y))return Object.assign(base,{kind:'tree'});
+    if(t.felled)continue;
+    if(trunkHit(t,x,y))return treeHit(i,'trunk');
     if(!a.crowns[i]&&crownHit(t,x,y)){
       a.crowns[i]=1;
       // крона: иногда останавливает, чаще стрела пролетает сквозь листву, теряя скорость и немного меняя курс
-      if(hash01(S.seed,a.no,i)<CROWN_BLOCK)return Object.assign(base,{kind:'tree'});
+      if(hash01(S.seed,a.no,i)<CROWN_BLOCK)return treeHit(i,'crown');
       const dev=(hash01(S.seed,a.no,i+31)-0.5)*0.14,c=Math.cos(dev),s=Math.sin(dev);
       const vx=a.vx*0.8,vy=a.vy*0.8;a.vx=vx*c-vy*s;a.vy=vx*s+vy*c;
       burst(x,y,5,'#4c8f3a',60,60,3,'leaf');
@@ -598,7 +650,16 @@ function resolveArrow(a,res){
     case'out':a.state='gone';addText(clamp(res.x,60,W-60),clamp(res.y,110,H-60),'Мимо','#fff');break;
     case'water':a.state='gone';splash(res.x);addText(res.x,WATER_Y-30,'Плюх!','#d6efff');sfx('splash');break;
     case'ground':a.state='stuck';burst(res.x,res.y-2,8,'#7a5a3a',110,500,2.2,'dot');sfx('thud');break;
-    case'tree':a.state='stuck';burst(res.x,res.y,8,'#4c8f3a',90,60,3,'leaf');sfx('thud');addText(res.x,res.y-20,'В дерево','#fff');break;
+    case'tree':{
+      a.state='stuck';a.treeIdx=res.tree;
+      burst(res.x,res.y,8,'#4c8f3a',90,60,3,'leaf');sfx('thud');
+      const t=trees[res.tree];
+      if(!t||t.felled){addText(res.x,res.y-20,'В дерево','#fff');break}
+      t.dmg+=Math.max(0,res.tdmg|0);
+      addText(res.x,res.y-20,'В дерево −'+(res.tdmg|0),'#fff');
+      if(res.felled)fellTree(res.tree,Math.cos(res.ang)>=0?1:-1);
+      break;
+    }
     case'player':{
       const t=S.by[res.id];a.state='gone';
       if(!t)break;
@@ -701,6 +762,7 @@ function simShot(ox,oy,vx,vy,wind,shooter){
     let stop=false;
     for(let j=0;j<trees.length;j++){
       const tr=trees[j];
+      if(tr.felled)continue;
       if(trunkHit(tr,x,y)){stop=true;break}
       if(!inCrown[j]&&crownHit(tr,x,y)){inCrown[j]=1;crowns++;vx*=0.8;vy*=0.8}
     }
@@ -801,6 +863,8 @@ function showOver(){
 function applyPending(){
   const m=S.pending;S.pending=null;
   syncHp(m.hp);
+  if(m.turn_no!=null)S.turnNo=m.turn_no;
+  syncTrees(m.trees,m.turn_no,false);
   if(m.score)S.score=m.score;
   if(m.game_over)endGame(m.winner);
   else beginTurn(m.turn,m.wind);
@@ -835,12 +899,16 @@ function update(dt){
       if(Math.abs(d)>0.3){p.x+=d*Math.min(1,dt*12);p.walk+=Math.abs(d)*Math.min(1,dt*12)*0.25;p.walkT=0.12}
     }
   }
-  updateArrows(dt);updateBirds(dt);updateFx(dt);
+  updateArrows(dt);updateBirds(dt);updateTrees(dt);updateFx(dt);
   if(S.state==='settle'){
     S.settleT-=dt;
     if(S.settleT<=0){
       if(mode==='online'){if(S.pending)applyPending();else S.state='wait'}
-      else{const w=winnerByHp();if(w)endGame(w);else beginTurn(nextTurnId(S.turn),nextWind())}
+      else{
+        const w=winnerByHp();
+        if(w)endGame(w);
+        else{S.turnNo++;setTreeTurns(S.turnNo);beginTurn(nextTurnId(S.turn),nextWind())}
+      }
     }
   }else if(S.state==='wait'&&S.pending)applyPending();
   if(S.over&&S.overT>0){S.overT-=dt;if(S.overT<=0)showOver()}
@@ -907,15 +975,46 @@ function drawPosts(){
   }
 }
 function drawTree(t){
-  const sway=Math.sin(S.time*1.2+t.seed)*1.2+S.wind*0.5,top=t.base-t.h;
+  // рисуем с плавно догоняющим размером (рост виден как анимация), столкновения — по точному
+  const k=t.kShow,h=t.h0*k,cr=t.cr0*k,tw=t.tw0*k;
+  const hpK=t.felled?0:clamp(1-t.dmg/treeMaxHp(t),0,1);
+  if(t.felled){
+    // пень, а само дерево падает и тает
+    ctx.fillStyle='#5a3d26';ctx.fillRect(t.x-tw/2,t.base-8,tw,8);
+    ctx.fillStyle='#b08a5e';ctx.beginPath();ctx.ellipse(t.x,t.base-8,tw/2,2,0,0,7);ctx.fill();
+    if(t.fallT>=1)return;
+    const e=t.fallT*t.fallT;
+    ctx.save();
+    ctx.globalAlpha=1-smooth(0.55,1,t.fallT);
+    ctx.translate(t.x,t.base-8);ctx.rotate(t.fallDir*e*Math.PI*0.48);ctx.translate(-t.x,-(t.base-8));
+    drawTreeBody(t,h,cr,tw,0,1);
+    ctx.restore();
+    return;
+  }
+  drawTreeBody(t,h,cr,tw,Math.sin(S.time*1.2+t.seed)*1.2+S.wind*0.5,hpK);
+  if(t.dmg>0){
+    // полоска прочности над кроной
+    const bw=34,bx=t.x-bw/2,by=t.base-h-cr*1.35-8;
+    ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(bx-1,by-1,bw+2,6);
+    ctx.fillStyle=hpK>0.5?'#7ccf5a':hpK>0.25?'#e5c33a':'#e0503b';ctx.fillRect(bx,by,bw*hpK,4);
+  }
+}
+function drawTreeBody(t,h,cr,tw,sway,hpK){
+  const top=t.base-h;
   ctx.fillStyle='#6b4a2f';ctx.beginPath();
-  ctx.moveTo(t.x-t.tw/2,t.base);ctx.lineTo(t.x+t.tw/2,t.base);ctx.lineTo(t.x+t.tw*0.3+sway*0.3,top);ctx.lineTo(t.x-t.tw*0.3+sway*0.3,top);ctx.closePath();ctx.fill();
-  const cx=t.x+sway,cy=top-t.cr*0.35,r=t.cr;
+  ctx.moveTo(t.x-tw/2,t.base);ctx.lineTo(t.x+tw/2,t.base);ctx.lineTo(t.x+tw*0.3+sway*0.3,top);ctx.lineTo(t.x-tw*0.3+sway*0.3,top);ctx.closePath();ctx.fill();
+  if(hpK<0.7){
+    // трещины на стволе у раненого дерева
+    ctx.strokeStyle='#3b2716';ctx.lineWidth=1.3;
+    line(t.x-tw*0.15,t.base-h*0.25,t.x+tw*0.12,t.base-h*0.42);
+    if(hpK<0.4)line(t.x+tw*0.18,t.base-h*0.55,t.x-tw*0.1,t.base-h*0.7);
+  }
+  const cx=t.x+sway,cy=top-cr*0.35,r=cr;
   const blobs=[[0,0,1],[-0.55,0.25,0.7],[0.55,0.25,0.7],[-0.3,-0.45,0.65],[0.35,-0.4,0.6]];
-  // крона полупрозрачная: видно, что она лишь частично закрывает
-  ctx.globalAlpha=0.92;
-  ctx.fillStyle='#2f6b2a';for(const [dx,dy,k] of blobs){ctx.beginPath();ctx.arc(cx+dx*r,cy+dy*r,r*k,0,7);ctx.fill()}
-  ctx.fillStyle='#4a8f3c';for(const [dx,dy,k] of blobs){ctx.beginPath();ctx.arc(cx+dx*r-3,cy+dy*r-4,r*k*0.7,0,7);ctx.fill()}
+  // крона полупрозрачная: видно, что она лишь частично закрывает; у раненого дерева — реже и желтее
+  ctx.globalAlpha*=0.72+0.2*hpK;
+  ctx.fillStyle=hpK>0.4?'#2f6b2a':'#5a6b2a';for(const [dx,dy,k] of blobs){ctx.beginPath();ctx.arc(cx+dx*r,cy+dy*r,r*k,0,7);ctx.fill()}
+  ctx.fillStyle=hpK>0.4?'#4a8f3c':'#8a9a3c';for(const [dx,dy,k] of blobs){ctx.beginPath();ctx.arc(cx+dx*r-3,cy+dy*r-4,r*k*0.7,0,7);ctx.fill()}
   ctx.globalAlpha=1;
 }
 function drawMoveZone(p){
@@ -1641,12 +1740,13 @@ function handleResumed(m){
   const fresh=!S||S.seed!==m.seed;
   if(fresh){
     show('game');
-    newMatch({seed:m.seed,wind:m.wind,turn:m.turn,score:m.score,opts:m.opts,active:m.active,names:slotNames()});
+    newMatch({seed:m.seed,wind:m.wind,turn:m.turn,score:m.score,opts:m.opts,active:m.active,names:slotNames(),trees:m.trees,turnNo:m.turn_no});
     for(const id in (m.pos||{}))if(m.pos[id]!=null&&S.by[id]){const p=S.by[id];p.x=m.pos[id];p.turnX=p.x;p.netX=null}
   }else if(!$('game').classList.contains('active'))show('game');
   applySlots(m);
   S.disconnected=false;
   syncHp(m.hp);S.score=m.score;
+  if(!fresh){if(m.turn_no!=null)S.turnNo=m.turn_no;syncTrees(m.trees,m.turn_no,false)}
   if(m.over){if(!S.over)endGame(m.winner);return}
   const myFlying=S.flying&&!S.flying.remote&&S.flying.state==='fly';
   if(m.shot){
@@ -1681,7 +1781,7 @@ function onNet(m){
     case'pong':NET.pongAt=Date.now();break;
     case'game_started':
       NET.retry=0;NET.started=true;mode='online';applySlots(m);show('game');
-      newMatch({seed:m.seed,wind:m.wind,turn:m.turn,score:m.score,opts:m.opts,active:m.active,names:slotNames()});
+      newMatch({seed:m.seed,wind:m.wind,turn:m.turn,score:m.score,opts:m.opts,active:m.active,names:slotNames(),trees:m.trees,turnNo:m.turn_no});
       applySlots(m);
       break;
     case'remote_state':

@@ -95,6 +95,8 @@ def new_round(g):
     g['winner'] = None
     g['shot'] = False
     g['last_idx'] = {'left': -1, 'right': -1}
+    g['turn_no'] = 0  # сколько ходов прошло: от него зависит рост деревьев
+    g['trees'] = {}   # урон деревьям: номер дерева (строкой) -> {dmg, felled}
     first = members(g, g['starter']) or g['active']
     set_turn(g, first[0])
     g['wind'] = new_wind(0.0, g['opts']['wind'])
@@ -119,6 +121,7 @@ def start_payload(g):
     return {
         'type': 'game_started', 'seed': g['seed'], 'wind': g['wind'], 'turn': g['turn'],
         'opts': g['opts'], 'score': g['score'], 'active': g['active'],
+        'turn_no': g['turn_no'], 'trees': g['trees'],
         'slots': slots_view(g), 'leader': leader(g),
     }
 
@@ -181,6 +184,12 @@ async def finish_turn(g, result):
         elif kind == 'bird' and shooter in hp:
             heal = max(0, min(15, int(result.get('heal', 0))))
             hp[shooter] = min(HP_MAX, hp[shooter] + heal)
+        elif kind == 'tree' and type(result.get('tree')) is int and 0 <= result['tree'] < 8:
+            # деревья считает стрелявший, сервер только запоминает — для тех, кто переподключится
+            t = g['trees'].setdefault(str(result['tree']), {'dmg': 0, 'felled': False})
+            t['dmg'] += max(0, min(80, int(result.get('tdmg', 0))))
+            if result.get('felled'):
+                t['felled'] = True
     g['shot'] = False
     alive = {t: any(hp[s] > 0 for s in members(g, t)) for t in ('left', 'right')}
     if not alive['left'] or not alive['right']:
@@ -190,9 +199,11 @@ async def finish_turn(g, result):
     else:
         set_turn(g, next_turn(g, shooter))
         g['wind'] = new_wind(g['wind'], g['opts']['wind'])
+        g['turn_no'] += 1
     await broadcast(g, {
         'type': 'turn_result', 'result': result, 'hp': hp, 'turn': g['turn'], 'wind': g['wind'],
         'game_over': g['over'], 'winner': g['winner'], 'score': g['score'],
+        'turn_no': g['turn_no'], 'trees': g['trees'],
     })
 
 

@@ -69,6 +69,8 @@ function newRound(g){
   for(const s of g.active){g.hp[s]=HP_MAX;g.pos[s]=null}
   g.over=false;g.winner=null;g.shot=false;
   g.last_idx={left:-1,right:-1};
+  g.turn_no=0;  // сколько ходов прошло: от него зависит рост деревьев
+  g.trees={};   // урон деревьям: номер дерева -> {dmg, felled}
   const first=members(g,g.starter);
   setTurn(g,(first.length?first:g.active)[0]);
   g.wind=newWind(0,g.opts.wind);
@@ -91,7 +93,7 @@ function slotsView(g){
 }
 function startPayload(g){
   return {type:'game_started',seed:g.seed,wind:g.wind,turn:g.turn,opts:g.opts,score:g.score,active:g.active,
-    slots:slotsView(g),leader:leader(g)};
+    turn_no:g.turn_no,trees:g.trees,slots:slotsView(g),leader:leader(g)};
 }
 function fullState(g,sid){
   const msg={type:'resumed',game_id:g.id,slot:sid,size:g.opts.size,bots:g.opts.bots,
@@ -180,6 +182,11 @@ class ArcherHub{
       }else if(kind==='bird'&&shooter in hp){
         const heal=Math.max(0,Math.min(15,toInt(result.heal)));
         hp[shooter]=Math.min(HP_MAX,hp[shooter]+heal);
+      }else if(kind==='tree'&&Number.isInteger(result.tree)&&result.tree>=0&&result.tree<8){
+        // деревья считает стрелявший, комната только запоминает — для тех, кто переподключится
+        const t=g.trees[result.tree]||(g.trees[result.tree]={dmg:0,felled:false});
+        t.dmg+=Math.max(0,Math.min(80,toInt(result.tdmg)));
+        if(result.felled)t.felled=true;
       }
     }
     g.shot=false;
@@ -192,9 +199,10 @@ class ArcherHub{
     }else{
       setTurn(g,nextTurn(g,shooter));
       g.wind=newWind(g.wind,g.opts.wind);
+      g.turn_no++;
     }
     this.broadcast(g,{type:'turn_result',result,hp,turn:g.turn,wind:g.wind,
-      game_over:g.over,winner:g.winner,score:g.score});
+      game_over:g.over,winner:g.winner,score:g.score,turn_no:g.turn_no,trees:g.trees});
   }
   dropPendingShot(g){
     // выстрел «повис» (стрелявший пропал) — засчитываем промах, чтобы игра не встала
@@ -391,6 +399,7 @@ class ArcherHub{
   }
   restore(snap){
     const g=JSON.parse(JSON.stringify(snap));
+    if(g.started){g.trees=g.trees||{};g.turn_no=g.turn_no||0} // снимок мог остаться от версии без деревьев
     for(const s in g.slots)Object.assign(g.slots[s],{ws:null,online:false,tasks:[]});
     this.games[g.id]=g;
     // все пока «отошли»: кто не вернётся вовремя — уступит место боту, как при обрыве связи
