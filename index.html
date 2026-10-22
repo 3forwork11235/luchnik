@@ -1430,25 +1430,50 @@ function loadPeerJs(){
   });
   return peerLib;
 }
-function peerOpts(){let o=null;try{o=JSON.parse(lsGet('archer_peer')||'null')}catch(e){}return Object.assign({debug:1},o||{})}
+// --- серверы для поиска маршрута между устройствами (ICE) ---
+// STUN подсказывает устройству его внешний адрес — этого хватает, если обе сети «пропускают» прямое соединение.
+// TURN — ретранслятор на случай, когда напрямую нельзя (мобильный интернет, CGNAT у провайдера).
+// TURN-серверы, встроенные в PeerJS, больше не существуют, поэтому подключаем свой: адрес, по которому
+// Metered (бесплатный тариф) выдаёт ключи доступа к ретранслятору. Пусто — только STUN.
+const STUN_SERVERS=[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},{urls:'stun:stun.cloudflare.com:3478'}];
+const TURN_CREDENTIALS_URL='';
+let iceCache=null;
+function iceServers(){
+  // для проверок можно задать свои: localStorage.archer_ice='[{"urls":"turn:…","username":"…","credential":"…"}]'
+  try{const o=JSON.parse(lsGet('archer_ice')||'null');if(Array.isArray(o))return Promise.resolve(STUN_SERVERS.concat(o))}catch(e){}
+  if(!TURN_CREDENTIALS_URL)return Promise.resolve(STUN_SERVERS);
+  if(iceCache&&Date.now()-iceCache.at<30*60e3)return Promise.resolve(iceCache.list);
+  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),5000);
+  return fetch(TURN_CREDENTIALS_URL,{signal:ctl.signal}).then(r=>r.ok?r.json():Promise.reject()).then(list=>{
+    clearTimeout(tm);
+    if(!Array.isArray(list))throw 0;
+    const all=STUN_SERVERS.concat(list);iceCache={at:Date.now(),list:all};return all;
+  }).catch(()=>{clearTimeout(tm);return STUN_SERVERS}); // ретранслятор недоступен — пробуем хотя бы напрямую
+}
+function hasTurn(){return !!TURN_CREDENTIALS_URL||!!lsGet('archer_ice')}
+function peerOpts(ice){let o=null;try{o=JSON.parse(lsGet('archer_peer')||'null')}catch(e){}return Object.assign({debug:1,config:{iceServers:ice}},o||{})}
+// почему не открылся канал: сеть не пропустила (ICE) или что-то ещё
+function iceErr(dc){const pc=dc&&dc.peerConnection,s=pc&&pc.iceConnectionState;return s==='failed'||s==='disconnected'||s==='checking'?'ice-'+s:null}
 function peerTransport(gid){
   const t=transport();
-  let peer=null;
+  let peer=null,dc=null;
   const fail=err=>{if(peer){try{peer.destroy()}catch(e){}}tLost(t,err)};
-  loadPeerJs().then(()=>{
+  Promise.all([loadPeerJs(),iceServers()]).then(([,ice])=>{
     if(t.readyState===3)return;
-    peer=new Peer(peerOpts());
-    peer.on('error',e=>{if(t.readyState===0)fail(e&&e.type||'error')}); // после соединения ошибки сервера знакомств не страшны
+    peer=new Peer(peerOpts(ice));
+    peer.on('error',e=>{if(t.readyState===0)fail(iceErr(dc)||(e&&e.type)||'error')}); // после соединения ошибки сервера знакомств не страшны
     peer.on('open',()=>{
       if(t.readyState===3)return;
-      const dc=peer.connect(PEER_PREFIX+gid,{reliable:true});
+      dc=peer.connect(PEER_PREFIX+gid,{reliable:true});
       dc.on('open',()=>tOpen(t));
       dc.on('data',d=>tData(t,d));
-      dc.on('close',()=>fail());
-      dc.on('error',()=>fail());
+      dc.on('close',()=>fail(iceErr(dc)||'closed'));
+      dc.on('error',e=>fail(iceErr(dc)||(e&&e.type)||'dc-error'));
       t.send=o=>dc.send(JSON.stringify(o));
     });
   },fail);
+  // так и не соединились — сдаёмся с понятной причиной
+  setTimeout(()=>{if(t.readyState===0)fail(iceErr(dc)||(dc?'timeout':peer&&peer.open?'timeout':'no-signal'))},20000);
   t.close=()=>{t.readyState=3;if(peer){try{peer.destroy()}catch(e){}}};
   return t;
 }
@@ -1458,8 +1483,8 @@ function peerTransport(gid){
 const HOST_KEY='archer_host';
 const HOST={peer:null,hub:null,gid:null,saveT:null};
 function hostListen(gid){
-  return loadPeerJs().then(()=>new Promise((res,rej)=>{
-    const peer=new Peer(PEER_PREFIX+gid,peerOpts());
+  return Promise.all([loadPeerJs(),iceServers()]).then(([,ice])=>new Promise((res,rej)=>{
+    const peer=new Peer(PEER_PREFIX+gid,peerOpts(ice));
     let opened=false;
     peer.on('open',()=>{opened=true;res(peer)});
     peer.on('error',e=>{if(!opened){try{peer.destroy()}catch(_){}rej(e&&e.type||'error')}});
@@ -1530,7 +1555,7 @@ function hostRestore(gid){
 function hostErrText(err){
   if(err==='no-lib')return'❌ Не удалось загрузить модуль связи — нужен интернет.';
   if(err==='browser-incompatible')return'❌ Этот браузер не поддерживает прямое соединение (WebRTC). Попробуйте Chrome или Safari.';
-  return'❌ Нет связи с сервером знакомств (PeerJS) — нужен интернет. Без интернета выберите «Через сервер на компьютере».';
+  return'❌ Нет связи с сервером знакомств (PeerJS) — нужен интернет. Без интернета выберите «Через сервер на компьютере». (код: '+err+')';
 }
 
 // Экран не гаснет, пока идёт онлайн-игра (особенно важно для создателя игры)
@@ -1577,7 +1602,11 @@ function lostText(){
   if(NET.via==='ws')return'❌ Нет соединения с сервером. Проверьте, что сервер запущен'+(PY_SERVER?' и устройство в той же сети.':' и адрес верный.');
   if(NET.err==='peer-unavailable')return'❌ Игра не найдена. Проверьте код — и что создатель игры её не закрыл.';
   if(NET.err==='no-lib')return'❌ Не удалось загрузить модуль связи — нужен интернет.';
-  return'❌ Не удалось соединиться с создателем игры. Нужен интернет; если не помогает — попробуйте другую сеть.';
+  const code=' (код: '+(NET.err||'closed')+(hasTurn()?'':', без TURN')+')';
+  if(/^ice-|timeout|negotiation/.test(NET.err||''))
+    return'❌ Игра найдена, но сеть не пропустила соединение между устройствами.'+(hasTurn()?' Попробуйте другую сеть (например, Wi-Fi вместо мобильного интернета).':' Нужен ретранслятор (TURN) — он ещё не настроен.')+code;
+  if(/network|server-error|socket|no-signal/.test(NET.err||''))return'❌ Нет связи с сервером знакомств (PeerJS) — проверьте интернет.'+code;
+  return'❌ Не удалось соединиться с создателем игры. Нужен интернет; если не помогает — попробуйте другую сеть.'+code;
 }
 function socketLost(){
   if(NET.token&&NET.gameId){scheduleReconnect();return}
