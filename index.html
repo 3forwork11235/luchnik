@@ -1433,25 +1433,31 @@ function loadPeerJs(){
 // --- серверы для поиска маршрута между устройствами (ICE) ---
 // STUN подсказывает устройству его внешний адрес — этого хватает, если обе сети «пропускают» прямое соединение.
 // TURN — ретранслятор на случай, когда напрямую нельзя (мобильный интернет, CGNAT у провайдера).
-// TURN-серверы, встроенные в PeerJS, больше не существуют, поэтому подключаем свой: адрес, по которому
-// Metered (бесплатный тариф) выдаёт ключи доступа к ретранслятору. Пусто — только STUN.
+// TURN-серверы, встроенные в PeerJS, больше не существуют, поэтому подключаем свой — Metered, бесплатный тариф
+// (500 МБ трафика через ретранслятор в месяц; прямые соединения в лимит не входят).
+// Ключ лежит в открытом коде — для TURN так и задумано: худшее, что можно сделать с ним, — потратить этот лимит.
+// Новый ключ: metered.ca → TURN Server → Credentials → кнопка «ICE» у ключа.
 const STUN_SERVERS=[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},{urls:'stun:stun.cloudflare.com:3478'}];
-const TURN_CREDENTIALS_URL='';
-let iceCache=null;
+const TURN_USER='0eea1dbe53ebb64348d2e282',TURN_PASS='IpRgNw5q7HDm5nlk';
+const TURN_SERVERS=[
+  'turn:global.relay.metered.ca:80',
+  'turn:global.relay.metered.ca:80?transport=tcp',
+  'turn:global.relay.metered.ca:443',
+  'turns:global.relay.metered.ca:443?transport=tcp', // через TLS на 443 — пройдёт даже там, где режут всё, кроме HTTPS
+].map(urls=>({urls,username:TURN_USER,credential:TURN_PASS}));
 function iceServers(){
   // для проверок можно задать свои: localStorage.archer_ice='[{"urls":"turn:…","username":"…","credential":"…"}]'
   try{const o=JSON.parse(lsGet('archer_ice')||'null');if(Array.isArray(o))return Promise.resolve(STUN_SERVERS.concat(o))}catch(e){}
-  if(!TURN_CREDENTIALS_URL)return Promise.resolve(STUN_SERVERS);
-  if(iceCache&&Date.now()-iceCache.at<30*60e3)return Promise.resolve(iceCache.list);
-  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),5000);
-  return fetch(TURN_CREDENTIALS_URL,{signal:ctl.signal}).then(r=>r.ok?r.json():Promise.reject()).then(list=>{
-    clearTimeout(tm);
-    if(!Array.isArray(list))throw 0;
-    const all=STUN_SERVERS.concat(list);iceCache={at:Date.now(),list:all};return all;
-  }).catch(()=>{clearTimeout(tm);return STUN_SERVERS}); // ретранслятор недоступен — пробуем хотя бы напрямую
+  return Promise.resolve(STUN_SERVERS.concat(TURN_SERVERS));
 }
-function hasTurn(){return !!TURN_CREDENTIALS_URL||!!lsGet('archer_ice')}
-function peerOpts(ice){let o=null;try{o=JSON.parse(lsGet('archer_peer')||'null')}catch(e){}return Object.assign({debug:1,config:{iceServers:ice}},o||{})}
+function hasTurn(){return TURN_SERVERS.length>0||!!lsGet('archer_ice')}
+function peerOpts(ice){
+  let o=null;try{o=JSON.parse(lsGet('archer_peer')||'null')}catch(e){}
+  const config={iceServers:ice};
+  // для проверки ретранслятора: localStorage.archer_relay='1' — соединяться только через TURN
+  if(lsGet('archer_relay')==='1')config.iceTransportPolicy='relay';
+  return Object.assign({debug:1,config},o||{});
+}
 // почему не открылся канал: сеть не пропустила (ICE) или что-то ещё
 function iceErr(dc){const pc=dc&&dc.peerConnection,s=pc&&pc.iceConnectionState;return s==='failed'||s==='disconnected'||s==='checking'?'ice-'+s:null}
 function peerTransport(gid){
