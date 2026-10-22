@@ -69,6 +69,15 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
 #emoteBar{position:absolute;left:50%;bottom:22%;transform:translateX(-50%);display:none;flex-wrap:wrap;gap:6px;justify-content:center;max-width:92%}
 #emoteBar.show{display:flex}
 #emoteBar .btn{padding:8px 13px;font-size:15px;background:rgba(15,20,34,.82);border:1px solid rgba(255,255,255,.22)}
+#overStats{max-width:96%;overflow:auto;margin:0 0 14px}
+#overStats table{border-collapse:collapse;font-size:clamp(11px,2.1vmin,14px);background:rgba(15,20,34,.75);border-radius:8px}
+#overStats th,#overStats td{padding:4px 8px;text-align:center;white-space:nowrap}
+#overStats th{color:var(--muted);font-weight:600}
+#overStats td:first-child{text-align:left;font-weight:700}
+#toast{position:fixed;left:50%;top:14px;transform:translate(-50%,-140%);z-index:30;background:#1d2436;color:var(--gold);border:1px solid rgba(255,207,74,.5);
+  border-radius:12px;padding:10px 16px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.4);transition:transform .35s;max-width:92vw;text-align:center}
+#toast.show{transform:translate(-50%,0)}
+#achList li.got{color:var(--text)}
 #over{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(10,14,24,.6);border-radius:10px;padding:10px}
 #over.show{display:flex}
 #overTitle{font-size:clamp(28px,6vmin,48px);font-weight:800;color:var(--gold);text-shadow:0 3px 0 rgba(0,0,0,.4)}
@@ -95,6 +104,8 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
         <select id="diff"><option value="easy">Лёгкий</option><option value="normal" selected>Средний</option><option value="hard">Сложный</option></select></label>
       <label>Время на ход
         <select id="optTimer"><option value="0">Без ограничения</option><option value="20">20 секунд</option><option value="30">30 секунд</option><option value="45">45 секунд</option></select></label>
+      <label>Матч
+        <select id="optWins"><option value="0">Без счёта</option><option value="3">До 3 побед</option><option value="5">До 5 побед</option></select></label>
     </div>
     <div class="row" style="margin-top:10px">
       <label class="chk"><input type="checkbox" id="optWind" checked> Ветер</label>
@@ -112,6 +123,7 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
     <div class="row">
       <button class="btn big b-blue" onclick="startLocal('2p')">👥 Игроки по очереди</button>
       <button class="btn big b-red" onclick="startLocal('ai')">🤖 Против ИИ</button>
+      <button class="btn big b-green" onclick="startLocal('coop')">🛡 Вместе против волн ИИ</button>
     </div>
   </div>
   <div class="card">
@@ -129,6 +141,7 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
     </div>
     <div class="row">
       <input type="text" id="playerName" placeholder="Ваше имя" maxlength="14" style="flex:1;min-width:160px" autocorrect="off" spellcheck="false">
+      <select id="optMode" style="flex:1;min-width:180px"><option value="versus">Друг против друга</option><option value="coop">Вместе против волн ИИ</option></select>
     </div>
     <div class="row" style="margin-top:10px">
       <button class="btn b-green" onclick="netCreate()">➕ Создать игру</button>
@@ -136,6 +149,15 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
       <button class="btn b-blue" onclick="netJoin()">🔗 Войти</button>
     </div>
     <div id="netStatus"></div>
+  </div>
+  <div class="card">
+    <h3>🎖 Достижения и внешний вид</h3>
+    <div class="grid">
+      <label>Шапка<select id="skinHat" onchange="saveSkin()"></select></label>
+      <label>Оперение стрел<select id="skinFletch" onchange="saveSkin()"></select></label>
+    </div>
+    <p id="achTitle" style="color:var(--muted);font-size:13px;margin:10px 0 4px"></p>
+    <ul class="rules" id="achList"></ul>
   </div>
   <div class="card">
     <h3>Как играть</h3>
@@ -191,8 +213,9 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
       <div id="over">
         <div id="overTitle"></div>
         <div id="overSub"></div>
+        <div id="overStats"></div>
         <div class="row" style="justify-content:center">
-          <button class="btn b-green" onclick="rematch()">🔄 Реванш</button>
+          <button class="btn b-green" onclick="rematch()" id="btnRematch">🔄 Реванш</button>
           <button class="btn" onclick="toMenu()">🏠 Меню</button>
         </div>
       </div>
@@ -274,7 +297,7 @@ function lsDel(k){try{localStorage.removeItem(k)}catch(e){}}
 
 // ================= Состояние =================
 let S=null, mode='2p';
-const opts={wind:true,birds:true,trees:'few',size:1,diff:'normal',bots:true,timer:0,specials:true,crates:true,weather:true,cover:true};
+const opts={wind:true,birds:true,trees:'few',size:1,diff:'normal',bots:true,timer:0,specials:true,crates:true,weather:true,cover:true,wins:0,mode:'versus'};
 let ground=new Float32Array(W+1), trees=[], waterL=0, waterR=0, bgSky=null, bgLand=null;
 
 // ================= Мир =================
@@ -478,6 +501,7 @@ function cur(){return S&&S.by[S.turn]}
 function defaultName(id,ids){
   const two=ids.filter(i=>teamOf(i)===teamOf(id)).length>1,n=two?' '+(+id[1]+1):'';
   if(mode==='ai')return(teamOf(id)==='left'?'Вы':'ИИ')+n;
+  if(mode==='coop')return(teamOf(id)==='left'?(two?'Игрок':'Вы'):'ИИ')+n;
   return TEAM[teamOf(id)].one+n;
 }
 function localIds(size){return size===2?SLOT_ORDER.slice():['L0','R0']}
@@ -486,7 +510,7 @@ function localIds(size){return size===2?SLOT_ORDER.slice():['L0','R0']}
 function ctrlOf(a){
   if(!a)return'remote';
   if(mode==='2p')return'human';
-  if(mode==='ai')return a.team==='left'?'human':'ai';
+  if(mode==='ai'||mode==='coop')return a.team==='left'?'human':'ai';
   if(a.id===NET.slot)return'human';
   const s=NET.slots[a.id];
   if(s&&s.kind==='bot'&&NET.leader===NET.slot)return'ai';
@@ -505,12 +529,16 @@ function newMatch(cfg){
     time:0,banner:null,state:'aim',over:false,winner:null,overT:0,pending:null,flying:null,ai:null,
     turn:null,wind:0,netT:0,netLast:'',blockT:0,disconnected:false,unsentResult:null,turnNo:cfg.turnNo||0,
     shake:0,slowT:0,turnT:0,timeUp:false,emotes:{},
-    crates:[],crateTimer:rnd(8,14),weather:WEATHER[cfg.weather]?cfg.weather:'clear',ammoSel:'normal',volley:null};
+    crates:[],crateTimer:rnd(8,14),weather:WEATHER[cfg.weather]?cfg.weather:'clear',ammoSel:'normal',volley:null,
+    wave:cfg.wave||1,matchOver:!!cfg.match_over};
+  // новый матч (счёт 0:0) или новый забег против волн — статистика с нуля
+  if(!cfg.score||(cfg.score.left+cfg.score.right===0&&S.wave===1))MATCH.stats={};
   for(const a of S.archers){
     S.by[a.id]=a;
     a.ammo=S.opts.specials!==false?Object.assign({},AMMO_START):{fire:0,heavy:0,triple:0};
   }
   syncStatus(cfg.st);
+  if(cfg.hp)for(const id in cfg.hp)if(S.by[id]){S.by[id].hp=S.by[id].hpShow=cfg.hp[id]}
   syncTrees(cfg.trees,S.turnNo,true);
   $('over').classList.remove('show');
   input.drawing=false;
@@ -518,6 +546,7 @@ function newMatch(cfg){
     for(let i=0;i<2;i++){const b=spawnBirds(rnd(200,1000));b.forEach(addBird);if(mode==='online')netSend({action:'bird_spawn',birds:b})}
   }
   beginTurn(cfg.turn||firstOf(cfg.starter||'left'),cfg.wind!=null?cfg.wind:nextWind());
+  if(S.opts.coop)showBanner('🌊 Волна '+S.wave,'#ffcf4a');
 }
 function firstOf(team){const m=members(team);return(m[0]||S.archers[0]).id}
 
@@ -697,6 +726,7 @@ function launch(p,angle,draw,no,kind,power,remote){
   const list=offs.map((d,i)=>{const a=spawnArrow(p,angle+d,draw,(no|0)+i,kind,power);a.remote=!!remote;a.idx=i;return a});
   S.volley={arrows:list,results:new Array(list.length),left:list.length};
   S.flying=list[list.length>1?1:0];S.state='flight';
+  statOf(p.id).shots++;
   p.draw=0;p.sway=0;p.angle=angle;
   sfx(kind==='heavy'?'heavy':kind==='fire'?'whoosh':'twang');
   return list;
@@ -810,7 +840,7 @@ function updateArrows(dt){
   const stuck=S.arrows.filter(a=>a.state==='stuck');
   if(stuck.length>26)stuck[0].state='gone';
 }
-function arrowColor(owner){return S.by[owner]?S.by[owner].color:'#ddd'}
+function arrowColor(owner){return fletchColor(owner)} // оперение — по скину стрелка
 function resolveArrow(a,res){
   a.x=res.x;a.y=res.y;a.ang=res.ang;a.kind=res.kind;a.trail=[];
   const shooter=S.by[a.owner];
@@ -827,13 +857,16 @@ function resolveArrow(a,res){
       if(!t||t.felled){addText(res.x,res.y-20,'В дерево','#fff');break}
       t.dmg+=Math.max(0,res.tdmg|0);
       addText(res.x,res.y-20,'В дерево −'+(res.tdmg|0),'#fff');
-      if(res.felled){t.felledAt=S.turnNo;t.dmgFell=t.dmg;fellTree(res.tree,Math.cos(res.ang)>=0?1:-1)}
-      else if(res.fire)igniteTree(res.tree,S.turnNo,false);
+      if(res.felled){
+        t.felledAt=S.turnNo;t.dmgFell=t.dmg;fellTree(res.tree,Math.cos(res.ang)>=0?1:-1);
+        statOf(a.owner).trees++;if(mine(shooter))track('felled');
+      }else if(res.fire){igniteTree(res.tree,S.turnNo,false);if(mine(shooter))track('burned')}
       break;
     }
     case'crate':{
       a.state='gone';
       openCrate(res.crateId,shooter,res.bonus);
+      statOf(a.owner).crates++;if(mine(shooter))track('crates');
       break;
     }
     case'player':{
@@ -850,6 +883,10 @@ function resolveArrow(a,res){
       t.stuck.push({dx:res.x-t.x,dy:res.y-groundAt(t.x),ang:res.ang,col:arrowColor(a.owner)});
       if(t.stuck.length>8)t.stuck.shift();
       t.hp=Math.max(0,t.hp-res.dmg);t.flinch=1;
+      if(shooter&&t.team!==shooter.team){
+        const st=statOf(a.owner);st.hits++;st.dmg+=res.dmg;if(res.zone==='head')st.heads++;
+        if(mine(shooter)){track('hits');if(res.zone==='head')track('heads')}
+      }
       burst(res.x,res.y,14,'#b3202a',160,500,2.5,'dot');burst(res.x,res.y,6,t.color,120,400,2.5,'dot');
       addText(t.x,groundAt(t.x)-80-(a.idx||0)*18,'-'+res.dmg+' '+ZONES[res.zone].label+(a.power?' ×2':''),res.zone==='head'?'#ffcf4a':'#ff8a7a',res.zone==='head'?26:20);
       if(res.id===a.owner)showBanner('Попал в себя!','#ffcf4a');
@@ -871,6 +908,8 @@ function resolveArrow(a,res){
       if(b&&!b.dead)killBird(b,a);
       a.state='gone';
       if(shooter){shooter.hp=Math.min(HP_MAX,shooter.hp+res.heal);shooter.trophies++}
+      statOf(a.owner).birds++;
+      if(mine(shooter)){track('birds');if(res.type==='goose')track('geese');if(res.roast)track('roasts')}
       addText(res.x,res.y-18,'+'+res.heal+' ❤ '+(res.roast?'Жареная ':'')+BIRDS[res.type].name.toLowerCase()+'!','#ffcf4a',22);
       if(res.roast)burst(res.x,res.y,12,'#ff8a2a',90,40,2.5,'dot');
       sfx('bird');
@@ -886,6 +925,8 @@ function resolveArrow(a,res){
   }
   const hits=v?v.results:[res];
   const result=hits.length>1?{kind:'multi',hits}:hits[0];
+  // «Тройной удар»: две стрелы одного залпа попали во врагов
+  if(hits.length===3&&mine(shooter)&&hits.filter(r=>r.kind==='player'&&!r.shield&&S.by[r.id]&&S.by[r.id].team!==shooter.team).length>=2)track('triples');
   S.volley=null;S.flying=null;S.state='settle';
   S.settleT=hits.some(r=>r.kind==='player'||r.kind==='bird'||r.kind==='crate')?1.4:1.0;
   if(!a.remote&&mode==='online'){
@@ -1153,7 +1194,7 @@ function updateAI(dt){
     const d=ai.tx-p.x;
     if(Math.abs(d)<1||ai.t>3||!walkArcher(p,p.x+Math.sign(d)*Math.min(Math.abs(d),WALK_SPEED*dt)))ai.ph='plan';
   }else if(ai.ph==='plan'){
-    const D=DIFF[S.opts.diff||opts.diff]||DIFF.normal;
+    const D=DIFF[S.opts.coop?waveDiff(S.wave):(S.opts.diff||opts.diff)]||DIFF.normal;
     const shot=findShot(p,S.wind*D.windK+gauss()*D.windErr);
     // противник в кусте — целиться труднее
     const hidden=S.archers.some(e=>e.team!==p.team&&!e.dead&&inBush(e));
@@ -1210,18 +1251,38 @@ function winnerByHp(){
 function endGame(w){
   if(S.over)return;
   S.over=true;S.winner=w;S.state='over';S.overT=1.3;input.drawing=false;
-  if(mode!=='online')S.score[w]++;
+  if(mode!=='online'){
+    S.score[w]++;
+    if(S.opts.coop){if(w==='left')S.wave++;else S.matchOver=true}
+    else if(S.opts.wins&&S.score[w]>=S.opts.wins)S.matchOver=true;
+  }
+  // достижения: победы и «без царапины» — против ИИ и онлайн, волны — вместе против ИИ
+  const myTeam=mode==='online'?(NET.slot&&teamOf(NET.slot)):'left';
+  if(mode!=='2p'&&w===myTeam){
+    if(S.opts.coop)trackMax('waveBest',S.wave);
+    else{track('wins');if(S.archers.some(a=>mine(a)&&a.hp>=HP_MAX))track('flawless')}
+  }
   sfx('win');
 }
 function teamLabel(t){return members(t).length>1?TEAM[t].name:(S.by[members(t)[0].id].name)}
 function showOver(){
-  const w=S.winner;let title;
-  if(mode==='2p')title='🏆 '+(members(w).length>1?'Победили '+TEAM[w].name:'Победил '+S.by[members(w)[0].id].name)+'!';
-  else if(mode==='ai')title=w==='left'?'🏆 Победа!':'🤖 ИИ победил';
-  else title=(NET.slot&&teamOf(NET.slot)===w)?'🏆 Победа!':'😞 Поражение';
-  $('overTitle').textContent=title;
-  $('overSub').textContent='Счёт: '+TEAM.left.name+' '+S.score.left+' : '+S.score.right+' '+TEAM.right.name;
+  const w=S.winner,mineWon=mode==='online'?(NET.slot&&teamOf(NET.slot)===w):w==='left';
+  let title,sub;
+  if(S.opts.coop){
+    if(w==='left'){title='🌊 Волна '+(S.wave-1)+' отбита!';sub='Дальше — волна '+S.wave+' · здоровье +30'}
+    else{title='💀 Отряд пал на волне '+S.wave;sub='Отбито волн: '+(S.wave-1)+(PROG.waveBest?' · рекорд: '+(PROG.waveBest-1):'')}
+  }else{
+    const m=S.matchOver;
+    if(mode==='2p')title='🏆 '+(m?'Матч: ':'')+(members(w).length>1?'Победили '+TEAM[w].name:'Победил '+S.by[members(w)[0].id].name)+'!';
+    else title=mineWon?(m?'🏆 Матч ваш!':'🏆 Победа!'):(mode==='ai'?(m?'🤖 ИИ выиграл матч':'🤖 ИИ победил'):(m?'😞 Матч проигран':'😞 Поражение'));
+    sub='Счёт: '+TEAM.left.name+' '+S.score.left+' : '+S.score.right+' '+TEAM.right.name+(S.opts.wins?' · до '+S.opts.wins+' побед':'');
+  }
+  $('overTitle').textContent=title;$('overSub').textContent=sub;
+  renderStats();
+  $('btnRematch').textContent=S.matchOver?(S.opts.coop?'🔄 Заново':'🔄 Новый матч'):S.opts.coop?'▶ Дальше':'🔄 Реванш';
   $('over').classList.add('show');
+  // вместе против ИИ: следующая волна начинается сама (в онлайне её запускает ведущий)
+  if(S.opts.coop&&!S.matchOver){const s0=S;setTimeout(()=>{if(S===s0&&S.over&&(mode!=='online'||NET.leader===NET.slot))rematch()},3500)}
 }
 function applyPending(){
   const m=S.pending;S.pending=null;
@@ -1232,6 +1293,8 @@ function applyPending(){
   if(m.turn_no!=null)S.turnNo=m.turn_no;
   syncTrees(m.trees,m.turn_no,false);
   if(m.score)S.score=m.score;
+  if(m.wave!=null)S.wave=m.wave;
+  S.matchOver=!!m.match_over;
   if(m.game_over)endGame(m.winner);
   else beginTurn(m.turn,m.wind);
 }
@@ -1260,9 +1323,118 @@ function syncHp(hp){
 function rematch(){
   if(!S)return;
   if(mode==='online'){netSend({action:'restart'});return}
+  const weather=pickWeather(S.opts.weather);
+  if(S.opts.coop){
+    // следующая волна (здоровье переходит, +30) или новый забег
+    const humans=S.archers.filter(a=>a.team==='left'),again=S.matchOver||!S.over,wave=again?1:S.wave;
+    const ids=humans.map(a=>a.id).concat(coopBots(wave)),prev={};
+    for(const a of humans)prev[a.id]=a.hp;
+    newMatch({seed:randSeed(),starter:'left',score:again?{left:0,right:0}:S.score,active:ids,opts:S.opts,weather,wave,hp:coopHp(ids,wave,again?null:prev)});
+    return;
+  }
+  if(S.matchOver){newMatch({seed:randSeed(),starter:'left',score:{left:0,right:0},active:S.archers.map(a=>a.id),opts:S.opts,weather});return}
   const starter=S.over?other(S.winner):'left';
-  newMatch({seed:randSeed(),starter,score:S.score,active:S.archers.map(a=>a.id),opts:S.opts,weather:pickWeather(S.opts.weather)});
+  newMatch({seed:randSeed(),starter,score:S.score,active:S.archers.map(a=>a.id),opts:S.opts,weather});
 }
+
+// ================= Статистика матча =================
+// Считается на каждом устройстве по одним и тем же результатам выстрелов, поэтому у всех одинаковая.
+// Сбрасывается, когда начинается новый матч (счёт 0:0) или новый забег против волн.
+const MATCH={stats:{}};
+function statOf(id){return MATCH.stats[id]||(MATCH.stats[id]={shots:0,hits:0,heads:0,dmg:0,birds:0,trees:0,crates:0})}
+function renderStats(){
+  const rows=S.archers.map(a=>{
+    const s=statOf(a.id),acc=s.shots?Math.round(s.hits/s.shots*100)+'%':'—';
+    return '<tr><td style="color:'+a.color+'">'+escHtml(nameOf(a.id))+'</td><td>'+s.shots+'</td><td>'+s.hits+' <small>('+acc+')</small></td><td>'+s.heads+'</td><td>'+s.dmg+'</td><td>'+s.birds+'</td><td>'+s.trees+'</td><td>'+s.crates+'</td></tr>';
+  }).join('');
+  $('overStats').innerHTML='<table><tr><th></th><th>Выстрелы</th><th>Попадания</th><th>В голову</th><th>Урон</th><th>🐦</th><th>🌳</th><th>📦</th></tr>'+rows+'</table>';
+}
+function escHtml(t){return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c])}
+
+// ================= Достижения и внешний вид =================
+// Прогресс хранится на этом устройстве. Засчитываются только «свои» бойцы — те, кем управляют здесь.
+const PROG_KEY='archer_progress';
+let PROG={};
+try{PROG=JSON.parse(lsGet(PROG_KEY)||'{}')||{}}catch(e){PROG={}}
+PROG.got=PROG.got||{};
+const ACH=[
+  {id:'first',  name:'Первая кровь',      desc:'Попади в противника',                      test:p=>p.hits>=1,   reward:'hat:feather'},
+  {id:'head5',  name:'Снайпер',           desc:'5 попаданий в голову',                     test:p=>p.heads>=5,  reward:'fletch:gold'},
+  {id:'head25', name:'Легенда лука',      desc:'25 попаданий в голову',                    test:p=>p.heads>=25, reward:'fletch:rainbow'},
+  {id:'goose',  name:'Гусиная охота',     desc:'Сбей гуся',                                test:p=>p.geese>=1},
+  {id:'roast',  name:'Жаркое',            desc:'Сбей птицу огненной стрелой',              test:p=>p.roasts>=1},
+  {id:'lumber', name:'Лесоруб',           desc:'Сруби 3 дерева',                           test:p=>p.felled>=3, reward:'hat:helmet'},
+  {id:'arson',  name:'Поджигатель',       desc:'Подожги дерево',                           test:p=>p.burned>=1},
+  {id:'crates', name:'Охотник за ящиками',desc:'Сбей 5 ящиков',                            test:p=>p.crates>=5, reward:'fletch:black'},
+  {id:'triple', name:'Тройной удар',      desc:'Попади двумя стрелами одного залпа',       test:p=>p.triples>=1},
+  {id:'flawless',name:'Без царапины',     desc:'Выиграй раунд, не потеряв здоровья',       test:p=>p.flawless>=1},
+  {id:'win5',   name:'Победитель',        desc:'5 побед (против ИИ или онлайн)',           test:p=>p.wins>=5,   reward:'hat:viking'},
+  {id:'win20',  name:'Чемпион',           desc:'20 побед',                                 test:p=>p.wins>=20,  reward:'hat:crown'},
+  {id:'wave5',  name:'Стойкий отряд',     desc:'Дойди до 5-й волны вместе против ИИ',      test:p=>p.waveBest>=5},
+];
+const HAT_NAMES={none:'Без шапки',cap:'Кепка',hood:'Капюшон',feather:'Шляпа с пером',helmet:'Шлем',viking:'Рогатый шлем',crown:'Корона'};
+const FLETCH_NAMES={team:'Цвет команды',gold:'Золотое',rainbow:'Радужное',black:'Чёрное'};
+const FREE={'hat:none':1,'hat:cap':1,'hat:hood':1,'fletch:team':1};
+function unlocked(key){return !!FREE[key]||ACH.some(a=>a.reward===key&&PROG.got[a.id])}
+function mine(p){return!!p&&ctrlOf(p)==='human'}
+function track(field,n){
+  PROG[field]=(PROG[field]||0)+(n==null?1:n);
+  for(const a of ACH)if(!PROG.got[a.id]&&a.test(PROG)){
+    PROG.got[a.id]=Date.now();
+    const r=a.reward?' — открыто: '+(a.reward.startsWith('hat:')?HAT_NAMES[a.reward.slice(4)]:'оперение «'+FLETCH_NAMES[a.reward.slice(7)]+'»'):'';
+    toast('🏅 '+a.name+r);
+  }
+  lsSet(PROG_KEY,JSON.stringify(PROG));
+}
+function trackMax(field,v){if(v>(PROG[field]||0)){PROG[field]=v;track(field,0)}} // рекорд, а не сумма
+let toastT=null;
+function toast(t){
+  const el=$('toast');el.textContent=t;el.classList.add('show');sfx('win');
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3500);
+}
+// Внешний вид: шапка и оперение (видно и другим игрокам в онлайне)
+function mySkin(){
+  let k={};try{k=JSON.parse(lsGet('archer_skin')||'{}')||{}}catch(e){}
+  return{hat:HAT_NAMES[k.hat]&&unlocked('hat:'+k.hat)?k.hat:'none',fletch:FLETCH_NAMES[k.fletch]&&unlocked('fletch:'+k.fletch)?k.fletch:'team'};
+}
+function skinOf(id){
+  if(mode==='online')return(NET.slots[id]&&NET.slots[id].skin)||{hat:'none',fletch:'team'};
+  if(id==='L0')return mySkin();
+  // боты в кооперативе с каждой волной выглядят грознее
+  if(mode==='coop'&&teamOf(id)==='right')return{hat:S.wave>=5?'viking':S.wave>=3?'helmet':'none',fletch:'team'};
+  return{hat:'none',fletch:'team'};
+}
+function fletchColor(owner){
+  const a=S.by[owner];if(!a)return'#ddd';
+  const f=skinOf(owner).fletch;
+  return f==='gold'?'#ffcf4a':f==='black'?'#222':f==='rainbow'?'hsl('+Math.round(S.time*140%360)+',90%,60%)':a.color;
+}
+function drawHat(hat,x,f,dark){
+  // голова: центр (x,-48), радиус 7
+  ctx.save();ctx.translate(x,-48);
+  if(hat==='cap'){ctx.fillStyle=dark;ctx.beginPath();ctx.arc(0,-1,7.8,Math.PI,0);ctx.fill();ctx.fillRect(f>0?2:-11,-2,9,2.5)}
+  else if(hat==='hood'){ctx.fillStyle='#355e3b';ctx.beginPath();ctx.arc(-f*1,0,9,Math.PI*0.9,Math.PI*2.1);ctx.fill();ctx.beginPath();ctx.moveTo(-f*8,-2);ctx.lineTo(-f*13,6);ctx.lineTo(-f*6,5);ctx.fill()}
+  else if(hat==='feather'){ctx.fillStyle='#6b4a2b';ctx.fillRect(-11,-4,22,3);ctx.beginPath();ctx.arc(0,-4,6.5,Math.PI,0);ctx.fill();ctx.strokeStyle='#e0503b';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-f*3,-6);ctx.quadraticCurveTo(-f*10,-16,-f*15,-12);ctx.stroke()}
+  else if(hat==='helmet'){ctx.fillStyle='#9aa1aa';ctx.beginPath();ctx.arc(0,-1,8.3,Math.PI,0);ctx.fill();ctx.fillRect(-8.3,-2,16.6,2.5);ctx.fillStyle='#7d838c';ctx.fillRect(f*2-1,-2,2,7)}
+  else if(hat==='viking'){ctx.fillStyle='#9aa1aa';ctx.beginPath();ctx.arc(0,-1,8.3,Math.PI,0);ctx.fill();ctx.fillStyle='#f3ead2';
+    for(const s of [-1,1]){ctx.beginPath();ctx.moveTo(s*6,-5);ctx.quadraticCurveTo(s*14,-7,s*13,-16);ctx.quadraticCurveTo(s*10,-9,s*4,-8);ctx.fill()}}
+  else if(hat==='crown'){ctx.fillStyle='#ffcf4a';ctx.beginPath();ctx.moveTo(-7,-5);ctx.lineTo(-7,-12);ctx.lineTo(-3.5,-8);ctx.lineTo(0,-13);ctx.lineTo(3.5,-8);ctx.lineTo(7,-12);ctx.lineTo(7,-5);ctx.closePath();ctx.fill();ctx.fillStyle='#e0503b';ctx.beginPath();ctx.arc(0,-7.5,1.4,0,7);ctx.fill()}
+  ctx.restore();
+}
+// Карточка в меню: выбор шапки и оперения + список достижений
+function renderProgress(){
+  const sk=mySkin();
+  const opt=(names,kind,cur)=>Object.keys(names).map(k=>{
+    const ok=unlocked(kind+':'+k),a=ACH.find(a=>a.reward===kind+':'+k);
+    return '<option value="'+k+'"'+(k===cur?' selected':'')+(ok?'':' disabled')+'>'+(ok?'':'🔒 ')+names[k]+(ok||!a?'':' — «'+a.name+'»')+'</option>';
+  }).join('');
+  $('skinHat').innerHTML=opt(HAT_NAMES,'hat',sk.hat);
+  $('skinFletch').innerHTML=opt(FLETCH_NAMES,'fletch',sk.fletch);
+  const got=ACH.filter(a=>PROG.got[a.id]).length;
+  $('achTitle').textContent='Достижения: '+got+' из '+ACH.length+(PROG.waveBest?' · рекорд волн: '+PROG.waveBest:'');
+  $('achList').innerHTML=ACH.map(a=>'<li class="'+(PROG.got[a.id]?'got':'')+'">'+(PROG.got[a.id]?'✅':'🔒')+' <b>'+a.name+'</b> — '+a.desc+'</li>').join('');
+}
+function saveSkin(){lsSet('archer_skin',JSON.stringify({hat:$('skinHat').value,fletch:$('skinFletch').value}));renderProgress()}
 
 // ================= Главный цикл =================
 function update(dt){
@@ -1480,6 +1652,7 @@ function drawArcher(p){
   ctx.fillStyle='#f0c8a0';ctx.beginPath();ctx.arc(lean,-48,7,0,7);ctx.fill();
   ctx.fillStyle=p.dark;ctx.beginPath();ctx.arc(lean,-49,7.6,Math.PI*1.02,Math.PI*1.98);ctx.fill();
   ctx.fillStyle='#222';ctx.beginPath();ctx.arc(lean+f*3,-48,1.3,0,7);ctx.fill();
+  const hat=skinOf(p.id).hat;if(hat&&hat!=='none')drawHat(hat,lean,f,p.dark);
   for(const s of p.stuck)drawArrowShape(s.dx,s.dy,s.ang,s.col,{len:20,noHead:true});
   if(!p.dead){
     const a=hide?(p.team==='left'?-0.55:Math.PI+0.55):p.angle+(p.sway||0),dx=Math.cos(a),dy=Math.sin(a),nx=-dy,ny=dx;
@@ -1651,7 +1824,8 @@ function drawHUD(){
   }
   ctx.textAlign='center';ctx.font='12px Segoe UI,Arial';ctx.fillStyle='rgba(255,255,255,.85)';
   const WE=WEATHER[S.weather]||WEATHER.clear;
-  ctx.fillText('Счёт '+S.score.left+' : '+S.score.right+(WE.name?'   ·   '+WE.icon+' '+WE.name:''),W/2,y+76);
+  const sc=S.opts.coop?'🌊 Волна '+S.wave:'Счёт '+S.score.left+' : '+S.score.right+(S.opts.wins?' (до '+S.opts.wins+')':'');
+  ctx.fillText(sc+(WE.name?'   ·   '+WE.icon+' '+WE.name:''),W/2,y+76);
   const nn=netNotice();
   if(nn){
     ctx.font='bold 14px Segoe UI,Arial';const tw=ctx.measureText(nn).width+28;
@@ -1797,7 +1971,7 @@ document.addEventListener('webkitfullscreenchange',()=>setTimeout(fit,100));
 function readOpts(){
   opts.wind=$('optWind').checked;opts.birds=$('optBirds').checked;opts.bots=$('optBots').checked;
   opts.trees=$('optTrees').value;opts.size=+$('optSize').value;opts.diff=$('diff').value;
-  opts.timer=+$('optTimer').value;
+  opts.timer=+$('optTimer').value;opts.wins=+$('optWins').value;opts.mode=$('optMode').value;
   for(const k of ['specials','crates','weather','cover'])opts[k]=$('opt'+k[0].toUpperCase()+k.slice(1)).checked;
   lsSet('archer_opts',JSON.stringify(opts));
 }
@@ -1805,7 +1979,7 @@ function readOpts(){
   try{const o=JSON.parse(lsGet('archer_opts')||'null');if(o)Object.assign(opts,o)}catch(e){}
   $('optWind').checked=opts.wind;$('optBirds').checked=opts.birds;$('optBots').checked=opts.bots;
   $('optTrees').value=opts.trees;$('optSize').value=String(opts.size);$('diff').value=opts.diff;
-  $('optTimer').value=String(opts.timer||0);
+  $('optTimer').value=String(opts.timer||0);$('optWins').value=String(opts.wins||0);$('optMode').value=opts.mode==='coop'?'coop':'versus';
   for(const k of ['specials','crates','weather','cover'])$('opt'+k[0].toUpperCase()+k.slice(1)).checked=opts[k]!==false;
   $('playerName').value=lsGet('archer_name')||'';
   // вибрация — настройка этого устройства, а не партии; на iPhone её нет вовсе
@@ -1814,15 +1988,27 @@ function readOpts(){
   $('optVibe').onchange=()=>{vibeOn=$('optVibe').checked;lsSet('archer_vibe',vibeOn?'1':'0');if(vibeOn)vibe(30)};
 })();
 function gameOpts(){return{wind:opts.wind,birds:opts.birds,trees:opts.trees,diff:opts.diff,size:opts.size,bots:opts.bots,timer:opts.timer,
-  specials:opts.specials,crates:opts.crates,weather:opts.weather,cover:opts.cover}}
+  specials:opts.specials,crates:opts.crates,weather:opts.weather,cover:opts.cover,wins:opts.wins,coop:opts.mode==='coop'}}
 function pickWeather(on){return on===false?'clear':WEATHERS[Math.floor(Math.random()*WEATHERS.length)]}
+// Вместе против ИИ: слева люди, справа боты; их больше, они крепче и метче с каждой волной
+function coopBots(w){return w>=3?['R0','R1']:['R0']}
+function botHp(w){return Math.min(HP_MAX,55+15*w)}
+function waveDiff(w){return w<=1?'easy':w<=3?'normal':'hard'}
+function coopHp(ids,wave,prev){
+  const h={};
+  for(const id of ids)h[id]=teamOf(id)==='right'?botHp(wave):wave>1&&prev?(prev[id]>0?Math.min(HP_MAX,prev[id]+30):50):HP_MAX;
+  return h;
+}
 function startLocal(m){
   audioInit();readOpts();netClose();clearSession();mode=m;NET.slot=null;show('game');
-  newMatch({seed:randSeed(),starter:'left',score:{left:0,right:0},active:localIds(opts.size),opts:gameOpts(),weather:pickWeather(opts.weather)});
+  const o=Object.assign(gameOpts(),{coop:m==='coop'});
+  const ids=m==='coop'?(opts.size===2?['L0','L1']:['L0']).concat(coopBots(1)):localIds(opts.size);
+  newMatch({seed:randSeed(),starter:'left',score:{left:0,right:0},active:ids,opts:o,weather:pickWeather(opts.weather),wave:1,hp:m==='coop'?coopHp(ids,1):null});
 }
 function toMenu(){
   if(NET.conn&&NET.gameId&&!NET.host)netSend({action:'leave'});
   clearSession();netClose();S=null;$('over').classList.remove('show');show('menu');
+  renderProgress();
 }
 
 // ================= Онлайн =================
@@ -2167,7 +2353,7 @@ function scheduleReconnect(delay){
       else{show('menu');netStatus('❌ '+lost)}
       return;
     }
-    openSocket({action:'resume',game_id:NET.gameId,slot:NET.slot,token:NET.token});
+    openSocket({action:'resume',game_id:NET.gameId,slot:NET.slot,token:NET.token,skin:mySkin()});
     const t=NET.conn;
     // P2P соединяется дольше: загрузка модуля, сервер знакомств, поиск маршрута
     setTimeout(()=>{if(NET.conn===t&&t&&t.readyState===0){NET.conn=null;t.close();scheduleReconnect()}},NET.via==='ws'?6000:15000);
@@ -2223,7 +2409,7 @@ function netConnect(first){
 }
 function netCreate(){
   readOpts();
-  const first={action:'create_game',name:myName(),opts:gameOpts()};
+  const first={action:'create_game',name:myName(),opts:gameOpts(),skin:mySkin()};
   // сначала регистрируем это устройство как хост (у PeerJS или у server.py), потом входим в свою же комнату
   audioInit();netClose();clearSession();
   if(NET.via==='ws'&&!PY_SERVER){const v=$('serverIp').value.trim();if(v)serverIp=v}
@@ -2239,7 +2425,7 @@ function netCreate(){
 function netJoin(){
   const id=$('joinId').value.trim().toUpperCase();
   if(!/^[A-Z0-9]{6}$/.test(id)){netStatus('Введите ID игры из 6 символов');return}
-  netConnect({action:'join_game',game_id:id,name:myName()});
+  netConnect({action:'join_game',game_id:id,name:myName(),skin:mySkin()});
 }
 function inviteLink(){
   if(!SERVED||!NET.gameId)return null;
@@ -2290,7 +2476,7 @@ function renderLobby(){
     const nm=document.createElement('span');nm.className='nm';
     nm.textContent=(two?TEAM[teamOf(id)].one+' '+(+id[1]+1):TEAM[teamOf(id)].one)+': '+(s.kind==='empty'?(NET.bots?'бот (если никто не придёт)':'свободно'):(s.name||'Игрок'))+(id===NET.slot?' — вы':'');
     const st=document.createElement('span');st.className='st';
-    st.textContent=s.kind==='empty'?'ждём':s.online?'✅ на месте':'⏸ отошёл';
+    st.textContent=s.kind==='empty'?'ждём':s.kind==='bot'&&!s.away?'🤖 бот':s.online?'✅ на месте':'⏸ отошёл';
     row.append(dot,nm,st);$('slotList').append(row);
   }
   const leader=NET.leader===NET.slot,free=ids.filter(i=>NET.slots[i].kind==='empty').length;
@@ -2309,13 +2495,13 @@ function handleResumed(m){
   const fresh=!S||S.seed!==m.seed;
   if(fresh){
     show('game');
-    newMatch({seed:m.seed,wind:m.wind,turn:m.turn,score:m.score,opts:m.opts,active:m.active,names:slotNames(),trees:m.trees,turnNo:m.turn_no,weather:m.weather,st:m.st});
+    newMatch({seed:m.seed,wind:m.wind,turn:m.turn,score:m.score,opts:m.opts,active:m.active,names:slotNames(),trees:m.trees,turnNo:m.turn_no,weather:m.weather,st:m.st,wave:m.wave,match_over:m.match_over,hp:m.hp});
     for(const id in (m.pos||{}))if(m.pos[id]!=null&&S.by[id]){const p=S.by[id];p.x=m.pos[id];p.turnX=p.x;p.netX=null}
   }else if(!$('game').classList.contains('active'))show('game');
   applySlots(m);
   S.disconnected=false;
   syncHp(m.hp);S.score=m.score;
-  if(!fresh){if(m.turn_no!=null)S.turnNo=m.turn_no;syncTrees(m.trees,m.turn_no,false);syncStatus(m.st)}
+  if(!fresh){if(m.turn_no!=null)S.turnNo=m.turn_no;syncTrees(m.trees,m.turn_no,false);syncStatus(m.st);S.wave=m.wave||1;S.matchOver=!!m.match_over}
   if(m.over){if(!S.over)endGame(m.winner);return}
   const myFlying=S.flying&&!S.flying.remote&&S.flying.state==='fly';
   if(m.shot){
@@ -2350,7 +2536,7 @@ function onNet(m){
     case'pong':NET.pongAt=Date.now();break;
     case'game_started':
       NET.retry=0;NET.started=true;mode='online';applySlots(m);show('game');
-      newMatch({seed:m.seed,wind:m.wind,turn:m.turn,score:m.score,opts:m.opts,active:m.active,names:slotNames(),trees:m.trees,turnNo:m.turn_no,weather:m.weather,st:m.st});
+      newMatch({seed:m.seed,wind:m.wind,turn:m.turn,score:m.score,opts:m.opts,active:m.active,names:slotNames(),trees:m.trees,turnNo:m.turn_no,weather:m.weather,st:m.st,wave:m.wave,match_over:m.match_over,hp:m.hp});
       applySlots(m);
       break;
     case'remote_state':
@@ -2431,7 +2617,9 @@ function netNotice(){
 if('serviceWorker' in navigator&&window.isSecureContext&&SERVED)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 $('btnSound').textContent=soundOn?'🔊':'🔇';
+renderProgress();
 requestAnimationFrame(frame);
 </script>
+<div id="toast"></div>
 </body>
 </html>

@@ -25,6 +25,12 @@ const ARROW_KINDS=['fire','heavy','triple'];
 const BONUSES=['fire','heavy','triple','shield','power','heal']; // что бывает в ящике
 const BURN_TURNS=2;   // подожжённое дерево сгорает через столько ходов
 const WEATHERS=['clear','clear','gusty','rain','fog']; // погода раунда (ясно — чаще)
+const HATS=['none','cap','hood','feather','helmet','viking','crown']; // внешний вид: шапка…
+const FLETCH=['team','gold','rainbow','black'];                       // …и оперение стрел
+function cleanSkin(k){k=k||{};return {hat:HATS.includes(k.hat)?k.hat:'none',fletch:FLETCH.includes(k.fletch)?k.fletch:'team'}}
+// Вместе против ИИ: справа — боты, их больше и они крепче с каждой волной
+function coopBots(wave){return wave>=3?['R0','R1']:['R0']}
+function botHp(wave){return Math.min(HP_MAX,55+15*wave)}
 
 function newWind(prev,enabled,weather){
   if(!enabled)return 0;
@@ -48,10 +54,12 @@ function cleanOpts(o){
     crates:flag(o.crates),     // ящики с бонусами
     weather:flag(o.weather),   // случайная погода на раунд
     cover:flag(o.cover),       // камни и кусты
+    wins:[0,3,5].includes(o.wins)?o.wins:0, // матч до стольких побед (0 — без счёта)
+    coop:!!o.coop,             // вместе против волн ИИ (size — сколько людей)
   };
 }
 function cleanName(n){return String(n==null?'':n).trim().slice(0,14)}
-function newSlot(){return {kind:'empty',ws:null,token:null,name:'',online:false,tasks:[]}}
+function newSlot(){return {kind:'empty',ws:null,token:null,name:'',online:false,tasks:[],skin:cleanSkin()}}
 
 // ---------- состояние раунда ----------
 
@@ -78,8 +86,16 @@ function setTurn(g,sid){
 }
 function newRound(g){
   g.seed=1+Math.floor(Math.random()*2147000000);
+  const prev=g.hp||{},coop=g.opts.coop;
+  if(coop)g.active=g.active.filter(s=>team(s)==='left').concat(coopBots(g.wave));
   g.hp={};g.pos={};
-  for(const s of g.active){g.hp[s]=HP_MAX;g.pos[s]=null}
+  for(const s of g.active){
+    g.pos[s]=null;
+    if(!coop)g.hp[s]=HP_MAX;
+    else if(team(s)==='right')g.hp[s]=botHp(g.wave);
+    // люди переходят в следующую волну со своим здоровьем +30; павший встаёт с половиной
+    else g.hp[s]=g.wave>1?(prev[s]>0?Math.min(HP_MAX,prev[s]+30):50):HP_MAX;
+  }
   g.over=false;g.winner=null;g.shot=false;
   g.last_idx={left:-1,right:-1};
   g.turn_no=0;  // сколько ходов прошло: от него зависит рост деревьев
@@ -104,20 +120,21 @@ function slotsView(g){
   const v={};
   for(const s in g.slots){
     const sl=g.slots[s];
-    v[s]={name:sl.name,kind:sl.kind,online:sl.online,away:sl.kind==='bot'&&sl.token!==null};
+    v[s]={name:sl.name,kind:sl.kind,online:sl.online,away:sl.kind==='bot'&&sl.token!==null,skin:sl.skin||cleanSkin()};
   }
   return v;
 }
 function startPayload(g){
   return {type:'game_started',seed:g.seed,wind:g.wind,turn:g.turn,opts:g.opts,score:g.score,active:g.active,
-    turn_no:g.turn_no,trees:g.trees,st:g.st,weather:g.weather,slots:slotsView(g),leader:leader(g)};
+    turn_no:g.turn_no,trees:g.trees,st:g.st,weather:g.weather,hp:g.hp,wave:g.wave,match_over:g.match_over,
+    slots:slotsView(g),leader:leader(g)};
 }
 function fullState(g,sid){
   const msg={type:'resumed',game_id:g.id,slot:sid,size:g.opts.size,bots:g.opts.bots,
     started:g.started,slots:slotsView(g),leader:leader(g)};
   if(g.started){
     const p=startPayload(g);delete p.type;
-    Object.assign(msg,p,{hp:g.hp,pos:g.pos,over:g.over,winner:g.winner,shot:g.shot});
+    Object.assign(msg,p,{pos:g.pos,over:g.over,winner:g.winner,shot:g.shot});
   }
   return msg;
 }
@@ -126,9 +143,10 @@ function freeSlotForJoin(g){
     for(const s of SLOT_ORDER)if(g.slots[s]&&g.slots[s].kind==='empty')return s;
     return null;
   }
-  // в идущей игре можно занять место бота или ушедшего
+  // в идущей игре можно занять место бота или ушедшего (в кооперативе — только среди людей)
   for(const s of g.active){
     const sl=g.slots[s];
+    if(g.opts.coop&&team(s)==='right')continue;
     if(sl.token===null&&(sl.kind==='bot'||sl.kind==='gone'))return s;
   }
   return null;
@@ -137,15 +155,17 @@ function startGame(g){
   const active=[];
   for(const s of SLOT_ORDER){
     const sl=g.slots[s];
-    if(!sl)continue;
+    if(!sl||(g.opts.coop&&team(s)==='right'))continue; // ботов справа добавит newRound по номеру волны
     if(sl.kind==='human')active.push(s);
     else if(g.opts.bots){sl.kind='bot';active.push(s)}
   }
+  if(g.opts.coop)active.push(...coopBots(g.wave));
   if(!active.some(s=>team(s)==='left')||!active.some(s=>team(s)==='right'))return false;
   g.active=active;g.started=true;
   newRound(g);
   return true;
 }
+function allHumans(g){return Object.keys(g.slots).every(s=>(g.opts.coop&&team(s)==='right')||g.slots[s].kind==='human')}
 function canControl(g,me,sid){
   if(!(sid in g.slots))return false;
   if(sid===me)return true;
@@ -225,6 +245,9 @@ class ArcherHub{
       g.over=true;
       g.winner=alive.left?'left':'right';
       g.score[g.winner]++;
+      // кооператив: отбились — следующая волна, пали — забег окончен; иначе матч до N побед
+      if(g.opts.coop){if(g.winner==='left')g.wave++;else g.match_over=true}
+      else if(g.opts.wins&&g.score[g.winner]>=g.opts.wins)g.match_over=true;
     }else{
       setTurn(g,nextTurn(g,shooter));
       g.wind=newWind(g.wind,g.opts.wind,g.weather);
@@ -236,7 +259,7 @@ class ArcherHub{
       }
     }
     this.broadcast(g,{type:'turn_result',result,hp,turn:g.turn,wind:g.wind,
-      game_over:g.over,winner:g.winner,score:g.score,turn_no:g.turn_no,trees:g.trees,st:g.st});
+      game_over:g.over,winner:g.winner,score:g.score,turn_no:g.turn_no,trees:g.trees,st:g.st,wave:g.wave,match_over:g.match_over});
   }
   dropPendingShot(g){
     // выстрел «повис» (стрелявший пропал) — засчитываем промах, чтобы игра не встала
@@ -311,12 +334,13 @@ class ArcherHub{
       if(!/^[A-Z0-9]{6}$/.test(gid)||this.games[gid])gid=randomGameId();
       while(this.games[gid])gid=randomGameId();
       const o=cleanOpts(data.opts);
-      const ids=o.size===2?SLOT_ORDER:['L0','R0'];
-      g={id:gid,opts:o,slots:{},active:[],started:false,score:{left:0,right:0},starter:'left'};
-      for(const s of ids)g.slots[s]=newSlot();
+      // кооператив: слева люди (1–2), справа два места ботов
+      const ids=o.coop?(o.size===2?['L0','L1','R0','R1']:['L0','R0','R1']):(o.size===2?SLOT_ORDER:['L0','R0']);
+      g={id:gid,opts:o,slots:{},active:[],started:false,score:{left:0,right:0},starter:'left',wave:1,match_over:false};
+      for(const s of ids){g.slots[s]=newSlot();if(o.coop&&team(s)==='right'){g.slots[s].kind='bot';g.slots[s].name='ИИ'}}
       me='L0';
       const sl=g.slots[me];
-      Object.assign(sl,{kind:'human',ws,token:newToken(),name:cleanName(data.name)||'Игрок 1',online:true});
+      Object.assign(sl,{kind:'human',ws,token:newToken(),name:cleanName(data.name)||'Игрок 1',online:true,skin:cleanSkin(data.skin)});
       this.games[gid]=g;
       c.g=g;c.me=me;
       this.send(ws,{type:'joined',game_id:gid,slot:me,token:sl.token});
@@ -330,13 +354,13 @@ class ArcherHub{
       g=gg;me=sid;c.g=g;c.me=me;
       const sl=g.slots[me];
       const n=Object.values(g.slots).filter(s=>s.token).length+1;
-      Object.assign(sl,{kind:'human',ws,token:newToken(),name:cleanName(data.name)||`Игрок ${n}`,online:true});
+      Object.assign(sl,{kind:'human',ws,token:newToken(),name:cleanName(data.name)||`Игрок ${n}`,online:true,skin:cleanSkin(data.skin)});
       this.send(ws,{type:'joined',game_id:gid,slot:me,token:sl.token});
       this.log(`[+] Игрок вошёл в ${gid} на место ${me}`);
       if(g.started){
         this.send(ws,fullState(g,me));
         this.sendSlots(g);
-      }else if(Object.values(g.slots).every(s=>s.kind==='human')){
+      }else if(allHumans(g)){
         startGame(g);
         this.broadcast(g,startPayload(g));
       }else this.sendSlots(g);
@@ -353,6 +377,7 @@ class ArcherHub{
       const old=sl.ws;
       cancelTasks(sl);
       Object.assign(sl,{ws,online:true,kind:'human'});
+      if(data.skin)sl.skin=cleanSkin(data.skin);
       if(old&&old!==ws){try{old.close()}catch(e){}}
       this.send(ws,fullState(g,me));
       this.sendSlots(g);
@@ -397,7 +422,9 @@ class ArcherHub{
       if(g.started&&!g.over&&g.shot&&g.turn===sid&&canControl(g,me,sid))this.finishTurn(g,data.result||{});
     }else if(action==='restart'){
       if(g.started){
-        if(g.over)g.starter=other(g.winner); // следующий раунд начинает проигравшая команда
+        if(g.match_over){g.score={left:0,right:0};g.wave=1;g.match_over=false;g.starter='left'} // новый матч / забег
+        else if(g.opts.coop)g.starter='left';                // в кооперативе первыми всегда ходят люди
+        else if(g.over)g.starter=other(g.winner);             // следующий раунд начинает проигравшая команда
         newRound(g);
         this.broadcast(g,startPayload(g));
       }
@@ -442,12 +469,13 @@ class ArcherHub{
     const g=this.games[gid];
     if(!g)return null;
     const slots={};
-    for(const s in g.slots){const sl=g.slots[s];slots[s]={kind:sl.kind,token:sl.token,name:sl.name}}
+    for(const s in g.slots){const sl=g.slots[s];slots[s]={kind:sl.kind,token:sl.token,name:sl.name,skin:sl.skin}}
     return JSON.parse(JSON.stringify(Object.assign({},g,{slots})));
   }
   restore(snap){
     const g=JSON.parse(JSON.stringify(snap));
     if(g.started){g.trees=g.trees||{};g.turn_no=g.turn_no||0;g.st=g.st||{};g.weather=g.weather||'clear'} // снимок от прошлой версии
+    g.wave=g.wave||1;g.match_over=!!g.match_over;
     for(const s in g.slots)Object.assign(g.slots[s],{ws:null,online:false,tasks:[]});
     this.games[g.id]=g;
     // все пока «отошли»: кто не вернётся вовремя — уступит место боту, как при обрыве связи
