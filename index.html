@@ -44,6 +44,7 @@ label.chk input{width:20px;height:20px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .hostwarn{color:#ffe7a8;background:rgba(255,207,74,.10);border:1px solid rgba(255,207,74,.4);border-radius:12px;padding:10px 12px;font-size:14px;max-width:440px;margin:10px auto}
 #updBar{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:40;background:linear-gradient(180deg,#ffdc7a,#e2a02a);color:#1d1606;box-shadow:0 8px 24px rgba(0,0,0,.45);max-width:92vw;animation:rise .4s ease both}
+#errBox{position:fixed;left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));z-index:50;background:#3a1414;color:#ffd2cc;border:1px solid #e0503b;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.5);word-break:break-word}
 .joinq{display:flex;gap:8px;justify-content:center;align-items:center;margin:0 auto 14px;max-width:440px}
 .joinq input{flex:1;min-width:0;text-transform:uppercase;text-align:center;letter-spacing:.2em;background:rgba(16,22,38,.8)}
 #serverInfo{color:var(--muted);font-size:13px;margin-bottom:10px}
@@ -378,6 +379,7 @@ input[type=range]{width:100%;accent-color:#ffcf4a;height:24px}
   <div id="pause">
     <div class="pcard glass">
       <h2>Пауза</h2>
+      <p class="muted small" id="pVer" style="margin:0"></p>
       <p class="muted small" id="pNote" style="margin:0 0 4px"></p>
       <button class="btn big b-green" onclick="pauseClose()">▶ Продолжить</button>
       <button class="btn big" onclick="pauseRestart()" id="pRestart">🔄 Начать раунд заново</button>
@@ -402,6 +404,17 @@ input[type=range]{width:100%;accent-color:#ffcf4a;height:24px}
 <script src="room.js"></script>
 <script>
 'use strict';
+const APP_VER='2.5'; // видно в меню и в паузе — по нему ясно, что на устройстве свежая версия
+// Любая ошибка показывается плашкой с версией: по скриншоту сразу ясно, что случилось на устройстве игрока
+let errShown=0;
+function reportError(msg){
+  try{console.error(msg)}catch(e){}
+  if(errShown++>=3)return;
+  let el=document.getElementById('errBox');
+  if(!el){el=document.createElement('div');el.id='errBox';el.onclick=()=>el.remove();document.body.append(el)}
+  el.textContent='⚠ Ошибка в игре (версия '+APP_VER+'): '+String(msg).slice(0,220)+' — пришлите скриншот разработчику. Нажмите, чтобы скрыть.';
+}
+addEventListener('error',e=>reportError((e.message||'ошибка')+' [строка '+(e.lineno||'?')+':'+(e.colno||'?')+']'));
 // ================= Константы мира и физики =================
 const W=1200,H=640;
 const PPM=20;            // пикселей в 1 метре
@@ -2123,7 +2136,6 @@ function coachShot(p){if(ctrlOf(p)==='human'&&coachN<3){coachN++;lsSet('archer_c
 // ---- Версия и обновление ----
 // По номеру в меню видно, что на устройстве свежая игра. Открытая страница раз в 2 минуты (и при возвращении)
 // сверяется с сайтом: вышла новая версия — предлагаем обновиться (в онлайне важно, чтобы у всех была одна).
-const APP_VER='2.4';
 let updShown=false;
 function checkUpdate(){
   if(!SERVED||updShown||document.hidden)return;
@@ -2636,8 +2648,9 @@ function draw(){
 function easeOutBack(x){const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)}
 let lastT=0;
 function frame(ts){
+  requestAnimationFrame(frame); // следующий кадр — в любом случае, даже если в этом что-то сломалось
   let dt=lastT?Math.min(0.05,(ts-lastT)/1000):0;lastT=ts;
-  if(S&&$('game').classList.contains('active')){
+  if(S&&$('game').classList.contains('active'))try{
     const real=dt;
     if(PAUSED)dt=0;
     else if(S.hitStop>0){S.hitStop-=real;dt=0}   // стоп-кадр в момент попадания
@@ -2645,8 +2658,7 @@ function frame(ts){
     if(S.intro&&!PAUSED)S.intro.t-=real;
     updateCam(real);
     update(dt);draw();
-  }
-  requestAnimationFrame(frame);
+  }catch(e){reportError((e&&e.message||e)+' @ '+String(e&&e.stack||'').split('\n').slice(1,3).join(' ').replace(/https?:\/\/[^ )]+\//g,''))}
 }
 
 // ================= Звук =================
@@ -2914,6 +2926,7 @@ function pauseOpen(){
 function pauseClose(){$('pause').classList.remove('show');PAUSED=false;exitArm=0}
 function pauseShown(){return $('pause').classList.contains('show')}
 function pauseSync(){
+  $('pVer').textContent='Лучник · версия '+APP_VER;
   $('pNote').textContent=mode==='online'?'Игра идёт дальше — пауза только на вашем экране.':'Время остановлено.';
   $('pRestart').textContent=mode==='online'?'🔄 Новый раунд для всех':S&&S.opts.range?'🔄 Начать заново':'🔄 Начать раунд заново';
   $('pMusic').textContent=SETTINGS.music>0?'🎵':'🔇';$('pMusic').title=SETTINGS.music>0?'Музыка включена':'Музыка выключена';
