@@ -35,6 +35,7 @@ function cleanOpts(o){
     diff:['easy','normal','hard'].includes(o.diff)?o.diff:'normal',
     size:o.size===2?2:1,
     bots:flag(o.bots),
+    timer:[0,20,30,45].includes(o.timer)?o.timer:0, // секунд на ход, 0 — без ограничения
   };
 }
 function cleanName(n){return String(n==null?'':n).trim().slice(0,14)}
@@ -150,7 +151,7 @@ class ArcherHub{
   }
 
   connect(conn){
-    const c={conn,g:null,me:null};
+    const c={conn,g:null,me:null,emoteAt:0};
     return {
       message:data=>{try{this._message(c,data)}catch(e){this.log('[!] Ошибка: '+e)}},
       closed:()=>{try{this._closed(c)}catch(e){this.log('[!] Ошибка: '+e)}},
@@ -186,7 +187,8 @@ class ArcherHub{
         // деревья считает стрелявший, комната только запоминает — для тех, кто переподключится
         const t=g.trees[result.tree]||(g.trees[result.tree]={dmg:0,felled:false});
         t.dmg+=Math.max(0,Math.min(80,toInt(result.tdmg)));
-        if(result.felled)t.felled=true;
+        // когда срубили — из пня через несколько ходов вырастет новое (это считают сами игроки по felled_at)
+        if(result.felled){t.felled=true;t.felled_at=g.turn_no;t.dmg_fell=t.dmg}
       }
     }
     g.shot=false;
@@ -342,6 +344,14 @@ class ArcherHub{
       g.shot=true;
       if(isNum(data.x))g.pos[sid]=data.x;
       this.broadcast(g,{type:'arrow_shot',id:sid,x:data.x,angle:data.angle,draw:data.draw,no:data.no},ws);
+    }else if(action==='skip'){
+      // время на ход вышло, а лук не натянут — ход переходит дальше
+      const sid=data.id;
+      if(g.started&&!g.over&&!g.shot&&g.turn===sid&&canControl(g,me,sid))this.finishTurn(g,{kind:'skip'});
+    }else if(action==='emote'){
+      // быстрая фраза над лучником; не чаще раза в секунду, чтобы не заспамили
+      const now=Date.now(),e=toInt(data.e);
+      if(g.started&&now-c.emoteAt>1000&&e>=0&&e<16){c.emoteAt=now;this.broadcast(g,{type:'emote',id:me,e},ws)}
     }else if(action==='bird_spawn'){
       if(leader(g)===me)this.broadcast(g,{type:'bird_spawn',birds:data.birds||[]},ws);
     }else if(action==='arrow_result'){

@@ -62,6 +62,9 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
 #game.below .ctl{top:100%;bottom:auto;margin-top:14px} /* узкий экран: кнопки под полем, а не поверх */
 #game.below .ctl .btn{--s:56px}
 .ctl .btn:active{background:rgba(59,143,224,.7)}
+#emoteBar{position:absolute;left:50%;bottom:22%;transform:translateX(-50%);display:none;flex-wrap:wrap;gap:6px;justify-content:center;max-width:92%}
+#emoteBar.show{display:flex}
+#emoteBar .btn{padding:8px 13px;font-size:15px;background:rgba(15,20,34,.82);border:1px solid rgba(255,255,255,.22)}
 #over{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(10,14,24,.6);border-radius:10px;padding:10px}
 #over.show{display:flex}
 #overTitle{font-size:clamp(28px,6vmin,48px);font-weight:800;color:var(--gold);text-shadow:0 3px 0 rgba(0,0,0,.4)}
@@ -86,11 +89,14 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
         <select id="optTrees"><option value="none">Нет</option><option value="few" selected>Мало</option><option value="many">Много</option></select></label>
       <label>Сложность ИИ
         <select id="diff"><option value="easy">Лёгкий</option><option value="normal" selected>Средний</option><option value="hard">Сложный</option></select></label>
+      <label>Время на ход
+        <select id="optTimer"><option value="0">Без ограничения</option><option value="20">20 секунд</option><option value="30">30 секунд</option><option value="45">45 секунд</option></select></label>
     </div>
     <div class="row" style="margin-top:10px">
       <label class="chk"><input type="checkbox" id="optWind" checked> Ветер</label>
       <label class="chk"><input type="checkbox" id="optBirds" checked> Птицы</label>
       <label class="chk"><input type="checkbox" id="optBots" checked> Онлайн: боты вместо недостающих и ушедших</label>
+      <label class="chk" id="vibeRow"><input type="checkbox" id="optVibe" checked> Вибрация</label>
     </div>
   </div>
   <div class="card">
@@ -166,11 +172,13 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
         <button class="btn" id="mvR" aria-label="Шаг вправо">▶</button>
       </div>
       <div class="ctl" id="ctlSys">
+        <button class="btn" id="btnEmote" onclick="toggleEmotes()" aria-label="Быстрые фразы" style="display:none">💬</button>
         <button class="btn" id="btnFs" onclick="toggleFullscreen()" aria-label="Во весь экран" style="display:none">⛶</button>
         <button class="btn" id="btnSound" onclick="toggleSound()" aria-label="Звук">🔊</button>
         <button class="btn" onclick="rematch()" aria-label="Заново">🔄</button>
         <button class="btn" onclick="toMenu()" aria-label="Меню">🏠</button>
       </div>
+      <div id="emoteBar"></div>
       <div id="over">
         <div id="overTitle"></div>
         <div id="overSub"></div>
@@ -219,6 +227,11 @@ const TREE_HP=80;        // прочность дерева исходного �
 const TREE_DMG={trunk:34,crown:16}; // урон дереву: стрела в стволе / застряла в кроне (как у лучника, зависит от скорости)
 const TREE_GROW=0.02;    // за каждый ход дерево подрастает на 2% исходного размера…
 const TREE_GROW_MAX=0.5; // …но не больше чем в полтора раза
+const TREE_REGROW=5;     // через столько ходов из пня прорастает новое дерево
+const SAP_K0=0.3,SAP_GROW=0.07; // росток: начальный размер (доля исходного) и прибавка за ход
+const LAME_MOVE=0.4;     // ранен в ноги: на следующий свой ход проходит только 40% обычного
+const SHAKY_SWAY=0.03;   // ранен в корпус или голову: на следующий ход прицел дрожит сильнее, рад
+const EMOTES=['Ха!','Мимо 😅','Красиво!','Ну погоди…','Ой!','👍'];
 const SLOT_ORDER=['L0','R0','L1','R1'];
 const teamOf=id=>id[0]==='L'?'left':'right';
 const ARCHER_COL={L0:['#3b8fe0','#1f5a99'],L1:['#3fb3d6','#1d6f8f'],R0:['#e0503b','#9b2d1f'],R1:['#e5893a','#9c5216']};
@@ -252,7 +265,7 @@ function lsDel(k){try{localStorage.removeItem(k)}catch(e){}}
 
 // ================= Состояние =================
 let S=null, mode='2p';
-const opts={wind:true,birds:true,trees:'few',size:1,diff:'normal',bots:true};
+const opts={wind:true,birds:true,trees:'few',size:1,diff:'normal',bots:true,timer:0};
 let ground=new Float32Array(W+1), trees=[], waterL=0, waterR=0, bgSky=null, bgLand=null;
 
 // ================= Мир =================
@@ -303,13 +316,29 @@ function buildWorld(seed,treesOpt,active){
 // ================= Деревья: рост и разрушение =================
 // Размер дерева зависит только от номера хода, урон приходит в результатах выстрелов —
 // поэтому у всех игроков деревья одинаковые.
+// Урон считаем «с рождения» дерева: у проросшего из пня старый урон не в счёт
+function treeDmg(t){return t.dmg-(t.dmgBase||0)}
 function treeMaxHp(t){return Math.round(TREE_HP*t.k)}
 function setTreeTurns(n,instant){
-  const k=1+Math.min(TREE_GROW_MAX,TREE_GROW*(n||0));
-  for(const t of trees){
+  n=n||0;
+  const kAll=1+Math.min(TREE_GROW_MAX,TREE_GROW*n);
+  for(let i=0;i<trees.length;i++){
+    const t=trees[i];
+    if(t.felled&&t.felledAt!=null&&n>=t.felledAt+TREE_REGROW)regrowTree(i,instant);
+    // росток растёт быстрее, пока не догонит остальные деревья
+    const k=t.born!=null?Math.min(kAll,SAP_K0+SAP_GROW*(n-t.born)):kAll;
     t.k=k;t.h=t.h0*k;t.cr=t.cr0*k;t.tw=t.tw0*k;
     if(instant)t.kShow=k;
   }
+}
+function regrowTree(i,instant){
+  const t=trees[i];
+  t.felled=false;t.fallT=0;t.born=t.felledAt+TREE_REGROW;
+  t.dmgBase=t.dmgFell!=null?t.dmgFell:t.dmg;
+  if(instant)return;
+  t.kShow=0.05; // вырастает на глазах
+  burst(t.x,t.base-10,10,'#6fbf4a',70,60,3,'leaf');
+  addText(t.x,t.base-40,'🌱 Проросло!','#bff0a0',16);
 }
 function fellTree(i,dir,instant){
   const t=trees[i];
@@ -320,17 +349,25 @@ function fellTree(i,dir,instant){
   burst(t.x,t.base-t.h*0.6,22,'#4c8f3a',150,120,3.5,'leaf');
   burst(t.x,t.base-8,12,'#8a6440',130,500,2.5,'dot');
   addText(t.x,t.base-t.h-t.cr*1.2,'Дерево срублено!','#ffcf4a',22);
+  S.shake=Math.max(S.shake,5);
   sfx('thud');
 }
 // Состояние деревьев от комнаты (при входе в игру и после каждого хода)
 function syncTrees(st,turnNo,instant){
-  if(turnNo!=null)setTreeTurns(turnNo,instant);
-  if(!st)return;
-  for(const i in st){
-    const t=trees[i];if(!t)continue;
-    t.dmg=st[i].dmg||0;
-    if(st[i].felled)fellTree(+i,0,instant);
+  for(const i in st||{}){
+    const t=trees[i],e=st[i];if(!t)continue;
+    t.dmg=e.dmg||0;
+    if(e.felled&&e.felled_at!=null){
+      // срублено в ход felled_at; если с тех пор прошло мало ходов — сейчас тут пень
+      const fresh=t.felledAt!==e.felled_at;
+      t.felledAt=e.felled_at;t.dmgFell=e.dmg_fell;
+      if(fresh){
+        if(turnNo==null||turnNo<e.felled_at+TREE_REGROW){t.felled=false;fellTree(+i,0,instant)}
+        else{t.felled=true;t.fallT=1} // уже успело прорасти — setTreeTurns ниже превратит пень в росток
+      }
+    }else if(e.felled)fellTree(+i,0,instant); // снимок от старой версии без felled_at
   }
+  if(turnNo!=null)setTreeTurns(turnNo,instant);
 }
 function updateTrees(dt){
   for(const t of trees){
@@ -385,7 +422,8 @@ function renderBg(r){
 function makeArcher(id,x,name){
   const team=teamOf(id),c=ARCHER_COL[id];
   return{id,team,x,name,hp:HP_MAX,hpShow:HP_MAX,angle:team==='left'?-0.55:Math.PI+0.55,draw:0,sway:0,stuck:[],
-    flinch:0,dead:false,deadT:0,walk:0,walkT:0,turnX:x,trophies:0,netX:null,gone:false,color:c[0],dark:c[1]};
+    flinch:0,dead:false,deadT:0,walk:0,walkT:0,turnX:x,trophies:0,netX:null,gone:false,color:c[0],dark:c[1],
+    lame:false,shaky:false,lameNext:false,shakyNext:false}; // ранения: действуют в текущий ход / ждут следующего
 }
 function makeClouds(){const c=[];for(let i=0;i<7;i++)c.push({x:rnd(-100,W+100),y:rnd(30,190),s:rnd(0.6,1.4)});return c}
 function members(team){return S.archers.filter(a=>a.team===team)}
@@ -417,7 +455,8 @@ function newMatch(cfg){
     archers:ids.map(id=>makeArcher(id,sp[id],(cfg.names&&cfg.names[id])||defaultName(id,ids))),by:{},
     lastIdx:{left:-1,right:-1},arrows:[],birds:[],parts:[],texts:[],clouds:makeClouds(),birdTimer:rnd(2,4),birdSeq:0,
     time:0,banner:null,state:'aim',over:false,winner:null,overT:0,pending:null,flying:null,ai:null,
-    turn:null,wind:0,netT:0,netLast:'',blockT:0,disconnected:false,unsentResult:null,turnNo:cfg.turnNo||0};
+    turn:null,wind:0,netT:0,netLast:'',blockT:0,disconnected:false,unsentResult:null,turnNo:cfg.turnNo||0,
+    shake:0,slowT:0,turnT:0,timeUp:false,emotes:{}};
   for(const a of S.archers)S.by[a.id]=a;
   syncTrees(cfg.trees,S.turnNo,true);
   $('over').classList.remove('show');
@@ -453,6 +492,12 @@ function beginTurn(id,wind){
   S.lastIdx[a.team]=members(a.team).indexOf(a);
   a.turnX=a.x;a.draw=0;a.sway=0;
   input.drawing=false;input.hold=0;
+  // ранения, полученные с прошлого хода, действуют именно в этот ход
+  for(const p of S.archers){p.lame=false;p.shaky=false}
+  a.lame=a.lameNext;a.shaky=a.shakyNext;a.lameNext=a.shakyNext=false;
+  if(a.lame)addText(a.x,groundAt(a.x)-90,'🦵 Хромает: меньше шагов','#ffb38a',16);
+  if(a.shaky)addText(a.x,groundAt(a.x)-(a.lame?110:90),'💫 Руки дрожат','#ffb38a',16);
+  S.turnT=S.opts.timer||0;S.timeUp=false;
   showBanner('Ход: '+nameOf(id),a.color);
 }
 function isHumanTurn(){
@@ -524,11 +569,12 @@ for(const [id,d] of [['mvL',-1],['mvR',1]]){
 // ================= Перемещение =================
 // Допустимый отрезок: своя территория, лимит шагов за ход, нельзя подойти вплотную к дереву или союзнику
 function moveRange(a){
-  const [A,B]=TERR[a.team];
-  let lo=Math.max(A,a.turnX-MOVE_MAX),hi=Math.min(B,a.turnX+MOVE_MAX);
-  let loWhy=a.turnX-MOVE_MAX>A?'budget':'edge',hiWhy=a.turnX+MOVE_MAX<B?'budget':'edge';
+  const [A,B]=TERR[a.team],mv=MOVE_MAX*(a.lame?LAME_MOVE:1);
+  let lo=Math.max(A,a.turnX-mv),hi=Math.min(B,a.turnX+mv);
+  let loWhy=a.turnX-mv>A?'budget':'edge',hiWhy=a.turnX+mv<B?'budget':'edge';
   const obs=[];
-  for(const t of trees)if(t.side===a.team&&!t.felled)obs.push({x:t.x,k:TREE_KEEP,why:'tree'});
+  // пень тоже не перешагнуть: из него потом вырастет новое дерево
+  for(const t of trees)if(t.side===a.team)obs.push({x:t.x,k:TREE_KEEP,why:t.felled?'stump':'tree'});
   for(const m of S.archers)if(m!==a&&m.team===a.team&&!m.dead)obs.push({x:m.x,k:MATE_KEEP,why:'mate'});
   for(const o of obs){
     if(o.x>=a.x){if(o.x-o.k<hi){hi=o.x-o.k;hiWhy=o.why}}
@@ -544,7 +590,7 @@ function walkArcher(a,nx){
   if(Math.abs(d)>0.001){a.x=nx;a.walk+=Math.abs(d)*0.25;a.walkT=0.12}
   return Math.abs(want-nx)<0.001;
 }
-const BLOCK_TEXT={budget:'Лимит шагов на этот ход',tree:'Вплотную к дереву нельзя',mate:'Тут стоит союзник',edge:'Край поля',river:'Дальше река!'};
+const BLOCK_TEXT={budget:'Лимит шагов на этот ход',tree:'Вплотную к дереву нельзя',stump:'Пень мешает пройти',mate:'Тут стоит союзник',edge:'Край поля',river:'Дальше река!'};
 function updateMove(dt){
   if(!isHumanTurn()||input.drawing)return;
   const d=clamp((input.keys.r?1:0)-(input.keys.l?1:0)+input.btn,-1,1);
@@ -553,7 +599,7 @@ function updateMove(dt){
   if(!walkArcher(p,p.x+d*WALK_SPEED*dt)&&S.blockT<=0){
     const R=moveRange(p);let why=d>0?R.hiWhy:R.loWhy;
     if(why==='edge'&&((p.team==='left'&&d>0)||(p.team==='right'&&d<0)))why='river';
-    addText(p.x,groundAt(p.x)-74,BLOCK_TEXT[why],'#fff');
+    addText(p.x,groundAt(p.x)-74,why==='budget'&&p.lame?'Хромает — дальше не дойти':BLOCK_TEXT[why],'#fff');
     S.blockT=1.2;
   }
 }
@@ -573,6 +619,7 @@ function fire(p,angle,draw){
   input.hold=0;input.drawing=false;
   const no=1+Math.floor(Math.random()*1e9);
   spawnArrow(p,angle,draw,no);
+  if(ctrlOf(p)==='human')vibe(12);
   if(mode==='online')netSend({action:'shoot',id:p.id,x:p.x,angle,draw,no});
 }
 function physStep(a,wind){
@@ -601,7 +648,7 @@ function collide(a){
   // попадание в дерево ранит его; кто добил — тот и срубил
   const treeHit=(i,part)=>{
     const t=trees[i],dmg=Math.round(TREE_DMG[part]*clamp(Math.hypot(a.vx,a.vy)/20,0.6,1.3));
-    return Object.assign(base,{kind:'tree',tree:i,tdmg:dmg,felled:t.dmg+dmg>=treeMaxHp(t)});
+    return Object.assign(base,{kind:'tree',tree:i,tdmg:dmg,felled:treeDmg(t)+dmg>=treeMaxHp(t)});
   };
   for(let i=0;i<trees.length;i++){
     const t=trees[i];
@@ -673,7 +720,7 @@ function resolveArrow(a,res){
       if(!t||t.felled){addText(res.x,res.y-20,'В дерево','#fff');break}
       t.dmg+=Math.max(0,res.tdmg|0);
       addText(res.x,res.y-20,'В дерево −'+(res.tdmg|0),'#fff');
-      if(res.felled)fellTree(res.tree,Math.cos(res.ang)>=0?1:-1);
+      if(res.felled){t.felledAt=S.turnNo;t.dmgFell=t.dmg;fellTree(res.tree,Math.cos(res.ang)>=0?1:-1)}
       break;
     }
     case'player':{
@@ -688,7 +735,14 @@ function resolveArrow(a,res){
       else if(shooter&&t.team===shooter.team)showBanner('По своим!','#ffcf4a');
       else if(res.zone==='head')showBanner('В ГОЛОВУ!','#ffcf4a');
       if(t.hp<=0&&!t.dead)killArcher(t);
+      if(mode!=='online')applyWound(res); // в онлайне — по результату от комнаты (applyPending), чтобы у всех одинаково
       sfx('hit');
+      // встряска, вибрация и замедление: попадание должно чувствоваться
+      const head=res.zone==='head',kill=t.hp<=0;
+      S.shake=Math.max(S.shake,head||kill?11:6);
+      if(head||kill)S.slowT=0.75;
+      if(ctrlOf(t)==='human')vibe(head?[90,40,160]:[70]);
+      else if(shooter&&ctrlOf(shooter)==='human'&&head)vibe([30,30,30]);
       break;
     }
     case'bird':{
@@ -710,6 +764,18 @@ function resolveArrow(a,res){
   }
 }
 function killArcher(p){p.dead=true;p.deadT=0;burst(p.x,groundAt(p.x)-30,20,p.color,180,400,3,'dot')}
+// Последствия ранения — на следующий собственный ход раненого: ноги — хромает, корпус/голова — дрожат руки
+function applyWound(res){
+  if(!res)return;
+  if(res.kind==='multi'){for(const h of res.hits||[])applyWound(h);return}
+  if(res.kind!=='player')return;
+  const t=S.by[res.id];
+  if(!t||t.dead||t.hp<=0)return;
+  if(res.zone==='legs')t.lameNext=true;else t.shakyNext=true;
+}
+// Вибрация телефона (если есть и не выключена в меню)
+let vibeOn=lsGet('archer_vibe')!=='0';
+function vibe(p){if(vibeOn&&navigator.vibrate)try{navigator.vibrate(p)}catch(e){}}
 
 // ================= Птицы =================
 function spawnBirds(xStart){
@@ -819,7 +885,7 @@ function updateAI(dt){
   }else if(ai.ph==='plan'){
     const D=DIFF[S.opts.diff||opts.diff]||DIFF.normal;
     const shot=findShot(p,S.wind*D.windK+gauss()*D.windErr);
-    ai.ang=shot.ang+gauss()*D.ang;ai.draw=clamp(shot.draw+gauss()*D.draw,MIN_DRAW,1);
+    ai.ang=shot.ang+gauss()*D.ang+(p.shaky?gauss()*SHAKY_SWAY*0.8:0);ai.draw=clamp(shot.draw+gauss()*D.draw,MIN_DRAW,1);
     ai.a0=p.angle;ai.ph='draw';ai.t=0;
   }else if(ai.ph==='draw'){
     const k=Math.min(1,ai.t/1.0),ek=1-(1-k)*(1-k);
@@ -847,6 +913,7 @@ function updateFx(dt){
     p.x+=p.vx*dt+(p.kind!=='dot'?Math.sin(S.time*4+p.rot)*18*dt:0);p.y+=p.vy*dt;p.rot+=p.vr*dt;p.life-=dt;
   }
   S.parts=S.parts.filter(p=>p.life>0);
+  for(const id in S.emotes){S.emotes[id].t-=dt;if(S.emotes[id].t<=0)delete S.emotes[id]}
   for(const t of S.texts){t.y-=22*dt;t.life-=dt}
   S.texts=S.texts.filter(t=>t.life>0);
   if(S.banner){S.banner.t-=dt;if(S.banner.t<=0)S.banner=null}
@@ -879,11 +946,31 @@ function showOver(){
 function applyPending(){
   const m=S.pending;S.pending=null;
   syncHp(m.hp);
+  applyWound(m.result);
+  if(m.result&&m.result.kind==='skip'){const p=cur();if(p&&!iControl(p))addText(p.x,groundAt(p.x)-80,'⏱ Время вышло','#ffcf4a')}
   if(m.turn_no!=null)S.turnNo=m.turn_no;
   syncTrees(m.trees,m.turn_no,false);
   if(m.score)S.score=m.score;
   if(m.game_over)endGame(m.winner);
   else beginTurn(m.turn,m.wind);
+}
+// Время на ход: отсчитывают все, а действует тот, кто управляет бойцом.
+// Лук натянут — стрела уходит как есть; не натянут — ход пропускается.
+function updateTimer(dt,c){
+  if(!S.opts.timer||S.state!=='aim'||S.over||S.disconnected||S.timeUp)return;
+  if(mode==='online'&&!netOnline())return;
+  const before=Math.ceil(S.turnT);
+  S.turnT-=dt;
+  if(ctrlOf(c)!=='human')return; // ИИ ходит быстро, ему таймер не нужен
+  if(Math.ceil(S.turnT)<before&&before<=5&&S.turnT>0)sfx('tick');
+  if(S.turnT>0)return;
+  if(input.drawing&&c.draw>=MIN_DRAW){fire(c,c.angle+c.sway,c.draw);return}
+  cancelDraw();
+  addText(c.x,groundAt(c.x)-80,'⏱ Время вышло','#ffcf4a');
+  if(mode==='online'){
+    if(netSend({action:'skip',id:c.id})){S.timeUp=true;S.state='wait'}
+    else S.turnT=1; // нет связи — попробуем через секунду
+  }else{S.state='settle';S.settleT=0.6}
 }
 function syncHp(hp){
   if(!hp)return;
@@ -898,12 +985,13 @@ function rematch(){
 
 // ================= Главный цикл =================
 function update(dt){
-  S.time+=dt;S.blockT-=dt;
+  S.time+=dt;S.blockT-=dt;S.shake=Math.max(0,S.shake-dt*30);
   updateMove(dt);updateAI(dt);
   const c=cur();
+  updateTimer(dt,c);
   if(input.drawing&&isHumanTurn()){
     if(c.draw>0.5)input.hold+=dt;else input.hold=Math.max(0,input.hold-dt*2);
-    const h=input.hold,amp=0.004+(h>2.2?Math.min(0.09,(h-2.2)*0.025):0);
+    const h=input.hold,amp=0.004+(h>2.2?Math.min(0.09,(h-2.2)*0.025):0)+(c.shaky?SHAKY_SWAY:0);
     c.sway=amp*(Math.sin(S.time*5.3)+0.6*Math.sin(S.time*8.9+1.3))/1.6;
   }
   for(const p of S.archers){
@@ -938,8 +1026,10 @@ function update(dt){
   }
   updateDom();
 }
-let lastHint='',lastHuman=null;
+let lastHint='',lastHuman=null,lastEmoteVis=null;
 function updateDom(){
+  const ev=mode==='online';
+  if(ev!==lastEmoteVis){lastEmoteVis=ev;$('btnEmote').style.display=ev?'':'none';if(!ev)$('emoteBar').classList.remove('show')}
   let h='';
   const nn=netNotice();
   if(nn)h=nn;
@@ -993,7 +1083,7 @@ function drawPosts(){
 function drawTree(t){
   // рисуем с плавно догоняющим размером (рост виден как анимация), столкновения — по точному
   const k=t.kShow,h=t.h0*k,cr=t.cr0*k,tw=t.tw0*k;
-  const hpK=t.felled?0:clamp(1-t.dmg/treeMaxHp(t),0,1);
+  const hpK=t.felled?0:clamp(1-treeDmg(t)/treeMaxHp(t),0,1);
   if(t.felled){
     // пень, а само дерево падает и тает
     ctx.fillStyle='#5a3d26';ctx.fillRect(t.x-tw/2,t.base-8,tw,8);
@@ -1008,7 +1098,7 @@ function drawTree(t){
     return;
   }
   drawTreeBody(t,h,cr,tw,Math.sin(S.time*1.2+t.seed)*1.2+S.wind*0.5,hpK);
-  if(t.dmg>0){
+  if(treeDmg(t)>0){
     // полоска прочности над кроной
     const bw=34,bx=t.x-bw/2,by=t.base-h-cr*1.35-8;
     ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(bx-1,by-1,bw+2,6);
@@ -1095,11 +1185,35 @@ function drawArcher(p){
     ctx.font='bold 11px Segoe UI,Arial';ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,.55)';
     const nm=nameOf(p.id);ctx.strokeText(nm,0,-6);ctx.fillStyle='#fff';ctx.fillText(nm,0,-6);
   }
+  // значки ранений: ждут следующего хода или действуют сейчас
+  const ic=p.dead?'':(p.lame||p.lameNext?'🦵':'')+(p.shaky||p.shakyNext?'💫':'');
+  if(ic){ctx.font='13px Segoe UI,Arial';ctx.textAlign='left';ctx.fillText(ic,11,16);ctx.textAlign='center'} // сбоку от головы
   if(isTurn&&S.state==='aim'){
     const bob=Math.sin(S.time*5)*3,yy=many?-20:-8;
     ctx.fillStyle=p.color;ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
     ctx.beginPath();ctx.moveTo(-7,yy-10+bob);ctx.lineTo(7,yy-10+bob);ctx.lineTo(0,yy+bob);ctx.closePath();ctx.fill();ctx.stroke();
   }
+  ctx.restore();
+}
+// Быстрые фразы (онлайн): кнопка 💬 открывает панель, фраза видна всем над твоим лучником
+(function(){EMOTES.forEach((t,i)=>{const b=document.createElement('button');b.className='btn';b.textContent=t;b.onclick=()=>sendEmote(i);$('emoteBar').append(b)})})();
+let emoteAt=0;
+function toggleEmotes(){$('emoteBar').classList.toggle('show')}
+function sendEmote(i){
+  $('emoteBar').classList.remove('show');
+  if(!S||mode!=='online'||!NET.slot||Date.now()-emoteAt<1200)return;
+  emoteAt=Date.now();showEmote(NET.slot,i);netSend({action:'emote',e:i});
+}
+function showEmote(id,i){if(!S||!S.by[id]||!EMOTES[i])return;S.emotes[id]={text:EMOTES[i],t:2.4};sfx('pop')}
+// Пузырь с быстрой фразой над лучником (онлайн)
+function drawEmote(p){
+  const e=S.emotes[p.id];if(!e)return;
+  ctx.save();ctx.translate(p.x,groundAt(p.x)-104);ctx.scale(UI,UI);
+  ctx.globalAlpha=Math.min(1,e.t*2.5);
+  ctx.font='bold 15px Segoe UI,Arial';const w=ctx.measureText(e.text).width+22;
+  ctx.fillStyle='#fff';rr(-w/2,-30,w,26,11);ctx.fill();
+  ctx.beginPath();ctx.moveTo(-6,-5);ctx.lineTo(6,-5);ctx.lineTo(0,4);ctx.fill();
+  ctx.fillStyle='#1d2436';ctx.textAlign='center';ctx.fillText(e.text,0,-12);
   ctx.restore();
 }
 function drawBird(b){
@@ -1197,6 +1311,11 @@ function drawHUD(){
   const cp=cur();
   ctx.fillStyle=S.over?'#ffcf4a':cp.color;
   ctx.fillText(S.over?'Игра окончена':'Ход: '+nameOf(S.turn),W/2,y+22);
+  if(S.opts.timer&&S.state==='aim'&&!S.over){
+    const left=Math.max(0,Math.ceil(S.turnT));
+    ctx.textAlign='left';ctx.font='bold 14px Segoe UI,Arial';ctx.fillStyle=left<=5?'#ff7a6a':'#cfd6e6';
+    ctx.fillText('⏱'+left,cx+10,y+22);ctx.textAlign='center';
+  }
   ctx.font='13px Segoe UI,Arial';ctx.fillStyle='#cfd6e6';
   if(!S.opts.wind)ctx.fillText('Ветра нет',W/2,y+46);
   else if(Math.abs(S.wind)<0.3)ctx.fillText('Ветер: штиль',W/2,y+46);
@@ -1231,7 +1350,9 @@ function drawHUD(){
   }
 }
 function draw(){
-  ctx.setTransform(RS,0,0,RS,0,0);
+  // встряска: всё поле, кроме панелей, слегка дёргается
+  const sh=S.shake,ox=sh?(Math.random()-0.5)*sh:0,oy=sh?(Math.random()-0.5)*sh:0;
+  ctx.setTransform(RS,0,0,RS,ox*RS,oy*RS);
   ctx.drawImage(bgSky,0,0,W,H);
   for(const c of S.clouds)drawCloud(c);
   ctx.drawImage(bgLand,0,0,W,H);
@@ -1261,12 +1382,17 @@ function draw(){
     ctx.fillStyle=t.color;ctx.fillText(t.text,t.x,t.y);
   }
   ctx.globalAlpha=1;
+  for(const p of S.archers)drawEmote(p);
+  ctx.setTransform(RS,0,0,RS,0,0);
   drawHUD();
 }
 let lastT=0;
 function frame(ts){
-  const dt=lastT?Math.min(0.05,(ts-lastT)/1000):0;lastT=ts;
-  if(S&&$('game').classList.contains('active')){update(dt);draw()}
+  let dt=lastT?Math.min(0.05,(ts-lastT)/1000):0;lastT=ts;
+  if(S&&$('game').classList.contains('active')){
+    if(S.slowT>0){S.slowT-=dt;dt*=0.3} // замедление после попадания в голову / добивания
+    update(dt);draw();
+  }
   requestAnimationFrame(frame);
 }
 
@@ -1284,6 +1410,8 @@ function sfx(n){
     case'hit':noise(0.1,0.3,900);tone(150,0.16,'square',0.1,-70);break;
     case'splash':noise(0.35,0.22,1300);break;
     case'bird':tone(900,0.08,'square',0.07,300);setTimeout(()=>{try{tone(650,0.12,'square',0.07,-250)}catch(e){}},90);break;
+    case'tick':tone(1200,0.05,'square',0.06,0);break;
+    case'pop':tone(520,0.07,'sine',0.12,260);break;
     case'win':[523,659,784].forEach((f,i)=>setTimeout(()=>{try{tone(f,0.25,'triangle',0.18,0)}catch(e){}},i*140));break;
   }}catch(e){}
 }
@@ -1335,15 +1463,21 @@ document.addEventListener('webkitfullscreenchange',()=>setTimeout(fit,100));
 function readOpts(){
   opts.wind=$('optWind').checked;opts.birds=$('optBirds').checked;opts.bots=$('optBots').checked;
   opts.trees=$('optTrees').value;opts.size=+$('optSize').value;opts.diff=$('diff').value;
+  opts.timer=+$('optTimer').value;
   lsSet('archer_opts',JSON.stringify(opts));
 }
 (function(){
   try{const o=JSON.parse(lsGet('archer_opts')||'null');if(o)Object.assign(opts,o)}catch(e){}
   $('optWind').checked=opts.wind;$('optBirds').checked=opts.birds;$('optBots').checked=opts.bots;
   $('optTrees').value=opts.trees;$('optSize').value=String(opts.size);$('diff').value=opts.diff;
+  $('optTimer').value=String(opts.timer||0);
   $('playerName').value=lsGet('archer_name')||'';
+  // вибрация — настройка этого устройства, а не партии; на iPhone её нет вовсе
+  if(!navigator.vibrate)$('vibeRow').style.display='none';
+  $('optVibe').checked=vibeOn;
+  $('optVibe').onchange=()=>{vibeOn=$('optVibe').checked;lsSet('archer_vibe',vibeOn?'1':'0');if(vibeOn)vibe(30)};
 })();
-function gameOpts(){return{wind:opts.wind,birds:opts.birds,trees:opts.trees,diff:opts.diff,size:opts.size,bots:opts.bots}}
+function gameOpts(){return{wind:opts.wind,birds:opts.birds,trees:opts.trees,diff:opts.diff,size:opts.size,bots:opts.bots,timer:opts.timer}}
 function startLocal(m){
   audioInit();readOpts();netClose();clearSession();mode=m;NET.slot=null;show('game');
   newMatch({seed:randSeed(),starter:'left',score:{left:0,right:0},active:localIds(opts.size),opts:gameOpts()});
@@ -1887,6 +2021,7 @@ function onNet(m){
       if(S&&S.by[m.id]){const p=S.by[m.id];p.x=m.x;p.netX=m.x;const a=spawnArrow(p,m.angle,m.draw,m.no);a.remote=true}
       break;
     case'bird_spawn':if(S&&!birdAuthority())m.birds.forEach(addBird);break;
+    case'emote':showEmote(m.id,m.e);break;
     case'turn_result':
       if(!S)break;
       S.pending=m;S.unsentResult=null;
