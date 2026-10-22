@@ -86,48 +86,115 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
 #rotate.show{display:flex}
 #rotate .ico{font-size:64px;animation:rot 2s ease-in-out infinite}
 @keyframes rot{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(90deg)}}
+
+/* ================= Оформление 2.0 ================= */
+body{background:#0b0f1a}
+.overlay.active{position:fixed;inset:0;z-index:6;overflow-y:auto;-webkit-overflow-scrolling:touch;max-width:none;padding:0;
+  background:linear-gradient(180deg,rgba(8,12,24,.30) 0%,rgba(8,12,24,.62) 40%,rgba(8,12,24,.86) 100%)}
+.mwrap{max-width:780px;margin:0 auto;padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 28px max(14px,env(safe-area-inset-left))}
+.logo{display:flex;flex-direction:column;align-items:center;margin:14px 0 6px;animation:rise .8s ease both}
+.crest{filter:drop-shadow(0 6px 18px rgba(255,190,80,.35));animation:float 5s ease-in-out infinite;line-height:0}
+.title{font-size:clamp(42px,11vw,78px);font-weight:900;letter-spacing:.16em;margin:8px 0 0;line-height:1;padding-left:.16em;
+  background:linear-gradient(180deg,#fff7dc 0%,#ffd76a 52%,#c27f1d 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 3px 0 rgba(0,0,0,.5)) drop-shadow(0 12px 26px rgba(0,0,0,.55))}
+.tag{color:#dfe5f2;margin:10px 0 0;letter-spacing:.22em;text-transform:uppercase;font-size:12px;opacity:.8}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.tabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:18px 0 12px}
+.tabs button{border:1px solid rgba(255,255,255,.12);background:rgba(18,24,40,.6);color:#d6dcea;padding:9px 14px;border-radius:999px;
+  font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);touch-action:manipulation;transition:background .15s,color .15s}
+.tabs button:hover{background:rgba(40,50,80,.7)}
+.tabs button.on{background:linear-gradient(180deg,#ffdc7a,#e2a02a);color:#1d1606;border-color:transparent;box-shadow:0 4px 16px rgba(255,190,70,.3)}
+.tab{display:none}.tab.on{display:block;animation:rise .3s ease both}
+.glass{background:rgba(16,22,38,.74);border:1px solid rgba(255,255,255,.08);box-shadow:0 12px 32px rgba(0,0,0,.35);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.card.glass{border-radius:16px;max-width:none;margin:0 0 12px}
+.modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media(max-width:560px){.modes{grid-template-columns:1fr}}
+.mode{display:flex;align-items:center;gap:14px;text-align:left;padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,.09);
+  background:rgba(16,22,38,.74);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:var(--text);cursor:pointer;font-family:inherit;
+  transition:transform .15s,box-shadow .15s,border-color .15s;position:relative;overflow:hidden;touch-action:manipulation}
+.mode::before{content:'';position:absolute;inset:0;background:radial-gradient(160px 110px at 0% 0%,var(--mc),transparent 70%);opacity:.38;pointer-events:none}
+.mode:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.24);box-shadow:0 12px 28px rgba(0,0,0,.45)}
+.mode:active{transform:scale(.985)}
+.mode .mi{font-size:32px;width:54px;height:54px;display:grid;place-items:center;border-radius:14px;background:rgba(255,255,255,.07);flex:none;position:relative}
+.mode .mt{position:relative}
+.mode b{display:block;font-size:18px}.mode small{display:block;color:#aab3c8;font-size:13px;margin-top:3px}
+.m-ai{--mc:#e0503b}.m-2p{--mc:#3b8fe0}.m-coop{--mc:#2fb36d}.m-range{--mc:#ffcf4a}
+.quick{color:#aab3c8;font-size:13px;text-align:center;margin:14px 0 0;line-height:1.6}
+.quick a{color:var(--gold);cursor:pointer;text-decoration:underline;white-space:nowrap}
+.muted{color:var(--muted)}.small{font-size:12.5px}
+.toggles{margin-top:10px}
+.sliders{display:grid;gap:14px}
+.sliders label{display:grid;grid-template-columns:minmax(110px,150px) 1fr;align-items:center;gap:12px;color:var(--text);font-size:14px}
+input[type=range]{width:100%;accent-color:#ffcf4a;height:24px}
+.ach{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.ach li{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.03);color:#8a93a8;font-size:14px}
+.ach li.got{color:var(--text);background:rgba(255,207,74,.09)}
+.ach li .ai{font-size:18px;width:26px;text-align:center;flex:none}
+.foot{text-align:center;color:#7a839a;font-size:12px;margin-top:18px}
+.lobbycard{text-align:center;margin-top:7vh}
+.lobbycard h2{margin:0 0 10px}
+/* фоновая партия ботов за меню */
+#game.demo .ctl,#game.demo #hint,#game.demo #ammoBar,#game.demo #emoteBar,#game.demo #over,#game.demo #pause{display:none!important}
+#game.demo #stage{overflow:hidden}
+#game.demo canvas{border-radius:0;pointer-events:none}
+/* пауза */
+#pause{position:absolute;inset:0;z-index:8;display:none;align-items:center;justify-content:center;background:rgba(6,9,18,.5);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+#pause.show{display:flex}
+.pcard{border-radius:18px;padding:20px;width:min(360px,92vw);display:flex;flex-direction:column;gap:10px;text-align:center;animation:rise .22s ease both}
+.pcard h2{margin:0;letter-spacing:.08em}
+.pcard .btn.big{flex:none}
+.prow{justify-content:center}.prow .btn{min-width:64px;font-size:20px}
+/* итоги раунда */
+#over{background:radial-gradient(ellipse at center,rgba(10,14,24,.5),rgba(10,14,24,.86))}
+#overTitle{animation:rise .45s ease both}
+#overMedals{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:0 0 12px}
+.medal{display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 12px;border-radius:12px;background:rgba(255,207,74,.10);border:1px solid rgba(255,207,74,.35);min-width:100px;animation:rise .45s ease both}
+.medal .mi{font-size:24px}.medal b{font-size:12.5px;color:var(--gold)}.medal span{font-size:12px;color:#dfe5f2}
+#ctlSys .btn{font-size:calc(var(--s)*0.38)}
 </style>
 </head>
 <body>
 
-<div class="screen active" id="menu">
-  <h1>🏹 Лучник</h1>
-  <p class="sub">Пошаговая дуэль лучников через реку</p>
-  <div class="card">
-    <h3>Настройки партии</h3>
-    <div class="grid">
-      <label>Формат
-        <select id="optSize"><option value="1">1 на 1</option><option value="2">2 на 2</option></select></label>
-      <label>Деревья
-        <select id="optTrees"><option value="none">Нет</option><option value="few" selected>Мало</option><option value="many">Много</option></select></label>
-      <label>Сложность ИИ
-        <select id="diff"><option value="easy">Лёгкий</option><option value="normal" selected>Средний</option><option value="hard">Сложный</option></select></label>
-      <label>Время на ход
-        <select id="optTimer"><option value="0">Без ограничения</option><option value="20">20 секунд</option><option value="30">30 секунд</option><option value="45">45 секунд</option></select></label>
-      <label>Матч
-        <select id="optWins"><option value="0">Без счёта</option><option value="3">До 3 побед</option><option value="5">До 5 побед</option></select></label>
+<div class="screen active overlay" id="menu">
+ <div class="mwrap">
+  <header class="logo">
+    <div class="crest" aria-hidden="true">
+      <svg viewBox="0 0 120 120" width="76" height="76">
+        <defs><linearGradient id="gGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2c4"/><stop offset=".55" stop-color="#ffcf4a"/><stop offset="1" stop-color="#b8751a"/></linearGradient></defs>
+        <circle cx="60" cy="60" r="54" fill="rgba(15,20,34,.75)" stroke="url(#gGold)" stroke-width="4"/>
+        <path d="M38 22 Q86 60 38 98" fill="none" stroke="url(#gGold)" stroke-width="6" stroke-linecap="round"/>
+        <path d="M38 22 L38 98" stroke="#eef1f7" stroke-width="1.6"/>
+        <path d="M26 60 L94 60" stroke="#eef1f7" stroke-width="3" stroke-linecap="round"/>
+        <path d="M94 60 L84 54 L84 66 Z" fill="url(#gGold)"/>
+        <path d="M30 60 L22 54 M30 60 L22 66 M35 60 L27 54 M35 60 L27 66" stroke="#e0503b" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
     </div>
-    <div class="row" style="margin-top:10px">
-      <label class="chk"><input type="checkbox" id="optWind" checked> Ветер</label>
-      <label class="chk"><input type="checkbox" id="optBirds" checked> Птицы</label>
-      <label class="chk"><input type="checkbox" id="optBots" checked> Онлайн: боты вместо недостающих и ушедших</label>
-      <label class="chk"><input type="checkbox" id="optSpecials" checked> Особые стрелы</label>
-      <label class="chk"><input type="checkbox" id="optCrates" checked> Ящики с бонусами</label>
-      <label class="chk"><input type="checkbox" id="optWeather" checked> Погода</label>
-      <label class="chk"><input type="checkbox" id="optCover" checked> Камни и кусты</label>
-      <label class="chk" id="vibeRow"><input type="checkbox" id="optVibe" checked> Вибрация</label>
+    <h1 class="title">ЛУЧНИК</h1>
+    <p class="tag">Дуэль лучников через реку</p>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="play">🎮 Играть</button>
+    <button data-tab="online">🌐 Онлайн</button>
+    <button data-tab="setup">⚔ Партия</button>
+    <button data-tab="prefs">⚙ Настройки</button>
+    <button data-tab="coll">🎖 Коллекция</button>
+    <button data-tab="help">📖 Как играть</button>
+  </nav>
+
+  <section class="tab" id="tab-play">
+    <div class="modes">
+      <button class="mode m-ai" onclick="startLocal('ai')"><span class="mi">🤖</span><span class="mt"><b>Против ИИ</b><small>Дуэль с компьютером</small></span></button>
+      <button class="mode m-2p" onclick="startLocal('2p')"><span class="mi">👥</span><span class="mt"><b>Вдвоём</b><small>По очереди на одном устройстве</small></span></button>
+      <button class="mode m-coop" onclick="startLocal('coop')"><span class="mi">🛡</span><span class="mt"><b>Против волн</b><small>Отбивайтесь от растущих волн ИИ</small></span></button>
+      <button class="mode m-range" onclick="startLocal('range')"><span class="mi">🎯</span><span class="mt"><b>Тир</b><small>10 стрел по мишеням <span id="rangeBest"></span></small></span></button>
     </div>
-  </div>
-  <div class="card">
-    <h3>Игра на одном устройстве</h3>
-    <div class="row">
-      <button class="btn big b-blue" onclick="startLocal('2p')">👥 Игроки по очереди</button>
-      <button class="btn big b-red" onclick="startLocal('ai')">🤖 Против ИИ</button>
-      <button class="btn big b-green" onclick="startLocal('coop')">🛡 Вместе против волн ИИ</button>
-    </div>
-  </div>
-  <div class="card">
-    <h3>🌐 Онлайн (на разных устройствах)</h3>
+    <p class="quick" id="quickSetup"></p>
+  </section>
+
+  <section class="tab" id="tab-online">
+   <div class="card glass">
     <div class="row" style="margin-bottom:8px">
       <select id="netVia" onchange="setVia(this.value,true)" style="flex:1;min-width:200px">
         <option value="p2p">Напрямую (P2P): сервер — устройство создателя</option>
@@ -149,56 +216,121 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
       <button class="btn b-blue" onclick="netJoin()">🔗 Войти</button>
     </div>
     <div id="netStatus"></div>
-  </div>
-  <div class="card">
-    <h3>🎖 Достижения и внешний вид</h3>
+    <p class="muted small">Формат (1 на 1 / 2 на 2) и правила берутся из вкладки «Партия».</p>
+   </div>
+  </section>
+
+  <section class="tab" id="tab-setup">
+   <div class="card glass">
+    <div class="grid">
+      <label>Формат
+        <select id="optSize"><option value="1">1 на 1</option><option value="2">2 на 2</option></select></label>
+      <label>Деревья
+        <select id="optTrees"><option value="none">Нет</option><option value="few" selected>Мало</option><option value="many">Много</option></select></label>
+      <label>Сложность ИИ
+        <select id="diff"><option value="easy">Лёгкий</option><option value="normal" selected>Средний</option><option value="hard">Сложный</option></select></label>
+      <label>Время на ход
+        <select id="optTimer"><option value="0">Без ограничения</option><option value="20">20 секунд</option><option value="30">30 секунд</option><option value="45">45 секунд</option></select></label>
+      <label>Матч
+        <select id="optWins"><option value="0">Без счёта</option><option value="3">До 3 побед</option><option value="5">До 5 побед</option></select></label>
+    </div>
+    <div class="row toggles">
+      <label class="chk"><input type="checkbox" id="optWind" checked> Ветер</label>
+      <label class="chk"><input type="checkbox" id="optBirds" checked> Птицы</label>
+      <label class="chk"><input type="checkbox" id="optSpecials" checked> Особые стрелы</label>
+      <label class="chk"><input type="checkbox" id="optCrates" checked> Ящики с бонусами</label>
+      <label class="chk"><input type="checkbox" id="optWeather" checked> Погода</label>
+      <label class="chk"><input type="checkbox" id="optCover" checked> Камни и кусты</label>
+      <label class="chk"><input type="checkbox" id="optBots" checked> Онлайн: боты вместо недостающих и ушедших</label>
+    </div>
+   </div>
+  </section>
+
+  <section class="tab" id="tab-prefs">
+   <div class="card glass">
+    <h3>Графика</h3>
+    <div class="grid">
+      <label>Качество
+        <select id="pfGfx"><option value="high">Высокое</option><option value="low">Экономное (слабые телефоны)</option></select></label>
+      <label>Время суток
+        <select id="pfTod"><option value="auto">Как выпадет</option><option value="dawn">Рассвет</option><option value="day">День</option><option value="sunset">Закат</option><option value="night">Ночь</option></select></label>
+      <label>Встряска экрана
+        <select id="pfShake"><option value="1">Обычная</option><option value="0.5">Слабая</option><option value="0">Нет</option></select></label>
+    </div>
+    <div class="row toggles">
+      <label class="chk"><input type="checkbox" id="pfCam"> Кинокамера за стрелой</label>
+      <label class="chk"><input type="checkbox" id="pfGhost"> «Призрак» прошлого выстрела</label>
+      <label class="chk"><input type="checkbox" id="pfCoach"> Подсказки новичку</label>
+      <label class="chk" id="vibeRow"><input type="checkbox" id="optVibe" checked> Вибрация</label>
+    </div>
+   </div>
+   <div class="card glass">
+    <h3>Звук</h3>
+    <div class="sliders">
+      <label><span>Общая громкость</span><input type="range" id="pfMaster" min="0" max="1" step="0.05"></label>
+      <label><span>Музыка</span><input type="range" id="pfMusic" min="0" max="1" step="0.05"></label>
+      <label><span>Эффекты</span><input type="range" id="pfSfx" min="0" max="1" step="0.05"></label>
+      <label><span>Природа</span><input type="range" id="pfAmb" min="0" max="1" step="0.05"></label>
+    </div>
+   </div>
+  </section>
+
+  <section class="tab" id="tab-coll">
+   <div class="card glass">
     <div class="grid">
       <label>Шапка<select id="skinHat" onchange="saveSkin()"></select></label>
       <label>Оперение стрел<select id="skinFletch" onchange="saveSkin()"></select></label>
     </div>
-    <p id="achTitle" style="color:var(--muted);font-size:13px;margin:10px 0 4px"></p>
-    <ul class="rules" id="achList"></ul>
-  </div>
-  <div class="card">
-    <h3>Как играть</h3>
+    <p id="achTitle" class="muted small" style="margin:12px 0 4px"></p>
+    <ul class="ach" id="achList"></ul>
+   </div>
+  </section>
+
+  <section class="tab" id="tab-help">
+   <div class="card glass">
     <ul class="rules">
       <li><b>Ход:</b> сначала можно отойти до 3 корпусов от места, где начался ход (<b>A/D</b>, <b>← →</b> или кнопки ◀ ▶), затем выстрелить. Команды ходят по очереди, внутри команды бойцы чередуются.</li>
-      <li><b>Выстрел:</b> зажмите палец или ЛКМ в любом месте поля и тяните <b>назад</b>, как тетиву. Чем дальше тянете, тем сильнее. Отпустите, чтобы выстрелить. Чтобы отменить, верните палец к точке нажатия (или нажмите ПКМ / Esc).</li>
+      <li><b>Выстрел:</b> зажмите палец или ЛКМ в любом месте поля и тяните <b>назад</b>, как тетиву. Чем дальше тянете, тем сильнее. Отпустите, чтобы выстрелить. Чтобы отменить, верните палец к точке нажатия (или нажмите ПКМ).</li>
+      <li>Пунктир показывает <b>прошлый выстрел</b> этого бойца — по нему удобно поправлять прицел.</li>
       <li>Если долго держать лук натянутым, руки устают и прицел начинает гулять.</li>
-      <li>Реку переходить нельзя. На стрелу действуют гравитация, сопротивление воздуха и <b>ветер</b> (флажки у реки показывают его направление).</li>
-      <li>Попадание в голову даёт крит, в корпус — обычный урон, в ноги — слабый. Своих тоже можно ранить!</li>
+      <li>Реку переходить нельзя. На стрелу действуют гравитация, сопротивление воздуха и <b>ветер</b> (флажки у реки и полосы в небе показывают его направление).</li>
+      <li>Попадание в голову даёт крит, в корпус — обычный урон, в ноги — слабый. Своих тоже можно ранить! Попадания подряд — <b>серия</b>.</li>
       <li><b>Ранения:</b> попали в ноги — на следующий ход хромаешь (меньше шагов); в корпус или голову — дрожат руки.</li>
       <li><b>Особые стрелы</b> (кнопки слева вверху или клавиши 1–4): 🔥 огненная поджигает дерево и жарит птицу, 🪨 тяжёлая бьёт сильнее и прошивает крону, но летит ниже, 🎯 тройная — веер из трёх стрел вполсилы. Запас ограничен.</li>
       <li><b>Ящики на парашюте:</b> собьёшь — получишь бонус: стрелы, щит на одно попадание, двойной урон или здоровье.</li>
       <li><b>Камни</b> прикрывают ноги и держат стрелы. В <b>кусте</b> противник не видит, куда ты целишься.</li>
       <li><b>Погода</b> на раунд: порывистый ветер, дождь (стрелы летят ниже) или туман (дальний берег виден хуже).</li>
-      <li><b>Деревья</b> прикрывают лишь частично: ствол останавливает стрелу, а сквозь крону она чаще пролетает, теряя скорость. Вплотную к дереву встать нельзя.</li>
-      <li>Деревья <b>можно срубить</b>: каждая стрела в стволе или застрявшая в кроне ранит дерево (ствол — сильнее). Но каждый ход деревья понемногу растут (до 1,5 раза) и становятся крепче.</li>
-      <li>Срубленное дерево оставляет пень — через 5 ходов из него прорастает новое.</li>
+      <li><b>Деревья</b> прикрывают лишь частично; их можно срубить или сжечь, а из пня через 5 ходов вырастет новое.</li>
       <li><b>Птицы</b> могут поймать стрелу. Сбитая птица лечит стрелка: голубь +5, утка +8, гусь +12.</li>
-      <li><b>Вместе против волн ИИ:</b> один или двое против ботов. С каждой волной их больше и они метче; здоровье переходит в следующую волну (+30).</li>
-      <li><b>Онлайн:</b> кнопка 💬 — быстрые фразы. За достижения открываются шапки и оперение стрел — их видят и другие игроки.</li>
-      <li><b>2 на 2 онлайн:</b> до 4 игроков. Если кого-то не хватает или игрок ушёл, за него играет бот (если включено). Новый игрок может занять место бота по ссылке.</li>
+      <li><b>Тир:</b> 10 стрел по мишеням на том берегу. Центр — 10 очков, дальние мишени — с множителем, сбитый воздушный шар — бонус.</li>
+      <li><b>Онлайн:</b> кнопка 💬 — быстрые фразы, до 4 игроков (2 на 2), боты займут пустые места. Клавиша <b>Esc</b> или кнопка ⏸ — пауза.</li>
     </ul>
-  </div>
+   </div>
+  </section>
+  <footer class="foot" id="menuFoot"></footer>
+ </div>
 </div>
 
-<div class="screen" id="lobby">
+<div class="screen overlay" id="lobby">
+ <div class="mwrap">
+  <div class="card glass lobbycard">
   <h2>⏳ Сбор игроков</h2>
-  <div>ID игры:</div>
+  <div class="muted">Код игры</div>
   <div id="gameIdBox">------</div>
   <div id="linkBox" style="display:none">
-    <div style="margin-top:6px">Ссылка для друзей:</div>
+    <div class="muted" style="margin-top:6px">Ссылка для друзей:</div>
     <div id="joinLink"></div>
     <button class="btn" onclick="copyLink()" id="btnCopy">📋 Копировать ссылку</button>
   </div>
   <div id="slotList"></div>
-  <p id="lobbyHint" style="color:var(--muted)"></p>
+  <p id="lobbyHint" class="muted"></p>
   <div class="row" style="justify-content:center">
     <button class="btn b-green" id="btnStart" onclick="netSend({action:'start_game'})">▶ Начать</button>
     <button class="btn b-red" onclick="toMenu()">Выйти</button>
   </div>
-  <p style="color:var(--muted);font-size:13px">Связь: <span id="serverShow"></span></p>
+  <p class="muted small">Связь: <span id="serverShow"></span></p>
+  </div>
+ </div>
 </div>
 
 <div class="screen" id="game">
@@ -212,15 +344,14 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
       <div class="ctl" id="ctlSys">
         <button class="btn" id="btnEmote" onclick="toggleEmotes()" aria-label="Быстрые фразы" style="display:none">💬</button>
         <button class="btn" id="btnFs" onclick="toggleFullscreen()" aria-label="Во весь экран" style="display:none">⛶</button>
-        <button class="btn" id="btnSound" onclick="toggleSound()" aria-label="Звук">🔊</button>
-        <button class="btn" onclick="rematch()" aria-label="Заново">🔄</button>
-        <button class="btn" onclick="toMenu()" aria-label="Меню">🏠</button>
+        <button class="btn" id="btnPause" onclick="pauseOpen()" aria-label="Пауза">⏸</button>
       </div>
       <div id="emoteBar"></div>
       <div id="ammoBar"></div>
       <div id="over">
         <div id="overTitle"></div>
         <div id="overSub"></div>
+        <div id="overMedals"></div>
         <div id="overStats"></div>
         <div class="row" style="justify-content:center">
           <button class="btn b-green" onclick="rematch()" id="btnRematch">🔄 Реванш</button>
@@ -230,6 +361,20 @@ canvas{display:block;width:100%;height:100%;border-radius:10px;background:#87c3e
     </div>
   </div>
   <div id="hint"></div>
+  <div id="pause">
+    <div class="pcard glass">
+      <h2>Пауза</h2>
+      <p class="muted small" id="pNote" style="margin:0 0 4px"></p>
+      <button class="btn big b-green" onclick="pauseClose()">▶ Продолжить</button>
+      <button class="btn big" onclick="pauseRestart()" id="pRestart">🔄 Начать раунд заново</button>
+      <div class="row prow">
+        <button class="btn" id="btnSound" onclick="toggleSound()" aria-label="Звук">🔊</button>
+        <button class="btn" id="pMusic" onclick="toggleMusic()" aria-label="Музыка">🎵</button>
+        <button class="btn" id="pCam" onclick="toggleCam()" aria-label="Кинокамера">🎥</button>
+      </div>
+      <button class="btn big b-red" onclick="pauseExit()" id="pExit">🏠 Выйти в меню</button>
+    </div>
+  </div>
 </div>
 
 <div id="rotate">
@@ -566,6 +711,7 @@ function members(team){return S.archers.filter(a=>a.team===team)}
 function cur(){return S&&S.by[S.turn]}
 function defaultName(id,ids){
   const two=ids.filter(i=>teamOf(i)===teamOf(id)).length>1,n=two?' '+(+id[1]+1):'';
+  if(mode==='range')return'Вы';
   if(mode==='ai')return(teamOf(id)==='left'?'Вы':'ИИ')+n;
   if(mode==='coop')return(teamOf(id)==='left'?(two?'Игрок':'Вы'):'ИИ')+n;
   return TEAM[teamOf(id)].one+n;
@@ -575,7 +721,8 @@ function localIds(size){return size===2?SLOT_ORDER.slice():['L0','R0']}
 // Кто управляет бойцом на этом устройстве: 'human' — я, 'ai' — мой компьютер, 'remote' — другой игрок/устройство
 function ctrlOf(a){
   if(!a)return'remote';
-  if(mode==='2p')return'human';
+  if(mode==='demo')return'ai'; // фоновая партия ботов за меню
+  if(mode==='2p'||mode==='range')return'human';
   if(mode==='ai'||mode==='coop')return a.team==='left'?'human':'ai';
   if(a.id===NET.slot)return'human';
   const s=NET.slots[a.id];
@@ -596,7 +743,9 @@ function newMatch(cfg){
     turn:null,wind:0,netT:0,netLast:'',blockT:0,disconnected:false,unsentResult:null,turnNo:cfg.turnNo||0,
     shake:0,slowT:0,turnT:0,timeUp:false,emotes:{},
     crates:[],crateTimer:rnd(8,14),weather:WEATHER[cfg.weather]?cfg.weather:'clear',ammoSel:'normal',volley:null,ghost:{},streak:{},
-    wave:cfg.wave||1,matchOver:!!cfg.match_over};
+    wave:cfg.wave||1,matchOver:!!cfg.match_over,
+    range:cfg.opts.range?{shot:0,score:0,shots:[],last:0}:null,targets:null,balloons:[],balloonT:rnd(3,6)};
+  if(S.range)S.targets=makeTargets();
   // новый матч (счёт 0:0) или новый забег против волн — статистика с нуля
   if(!cfg.score||(cfg.score.left+cfg.score.right===0&&S.wave===1))MATCH.stats={};
   for(const a of S.archers){
@@ -657,7 +806,8 @@ function beginTurn(id,wind){
   if(a.lame)addText(a.x,groundAt(a.x)-90,'🦵 Хромает: меньше шагов','#ffb38a',16);
   if(a.shaky)addText(a.x,groundAt(a.x)-(a.lame?110:90),'💫 Руки дрожат','#ffb38a',16);
   S.turnT=S.opts.timer||0;S.timeUp=false;S.ammoSel='normal';
-  showBanner('Ход: '+nameOf(id),a.color);
+  if(S.range)showBanner('Стрела '+(S.range.shot+1)+' из '+RANGE_SHOTS,'#ffcf4a');
+  else showBanner('Ход: '+nameOf(id),a.color);
 }
 function isHumanTurn(){
   if(!S||S.over||S.state!=='aim'||S.disconnected)return false;
@@ -710,7 +860,7 @@ addEventListener('keydown',e=>{
   const k=e.code;
   if(k==='KeyA'||k==='ArrowLeft'){input.keys.l=1;e.preventDefault()}
   if(k==='KeyD'||k==='ArrowRight'){input.keys.r=1;e.preventDefault()}
-  if(k==='Escape')cancelDraw();
+  if(k==='Escape'||k==='KeyP'){if(input.drawing)cancelDraw();else if(pauseShown())pauseClose();else pauseOpen()}
   if(/^Digit[1-4]$/.test(k))selectAmmo(ARROW_KINDS[+k[5]-1]);
   if(k==='KeyM')toggleSound();
 });
@@ -816,6 +966,7 @@ function fire(p,angle,draw){
   S.ammoSel='normal';
   launch(p,angle,draw,no,kind,power,false);
   if(ctrlOf(p)==='human')vibe(12);
+  coachShot(p);
   if(mode==='online')netSend({action:'shoot',id:p.id,x:p.x,angle,draw,no,kind});
 }
 function physStep(a,wind){
@@ -865,6 +1016,7 @@ function collide(a){
     }
   }
   for(const c of S.crates)if(crateHit(c,x,y))return Object.assign(base,{kind:'crate',crateId:c.id,bonus:c.bonus});
+  if(S.targets){const th=hitTargets(a,base);if(th)return th}
   for(const b of S.birds){
     if(b.dead)continue;
     const s=BIRDS[b.type].size;
@@ -941,6 +1093,26 @@ function resolveArrow(a,res){
       }else if(res.fire){igniteTree(res.tree,S.turnNo,false);if(mine(shooter))track('burned')}
       break;
     }
+    case'target':{
+      a.state='stuck';
+      const R=S.range;if(R){R.score+=res.pts;R.last=(R.last||0)+res.pts}
+      const t=S.targets&&S.targets[res.ti];
+      burst(res.x,res.y,10,'#f4efe2',90,300,2,'dot');
+      addPart({x:res.x,y:res.y,kind:'ring',g:0,life:0.4,max:0.4,size:34,color:res.ring>=10?'#ffcf4a':'#ffffff'});
+      addText(res.x,(t?t.y-t.r:res.y)-22,'+'+res.pts+(res.ring>=10?' 🎯':''),res.ring>=10?'#ffcf4a':'#ffffff',res.ring>=10?26:20);
+      if(res.ring>=10){showBanner('В яблочко!','#ffcf4a');S.shake=Math.max(S.shake,5)}
+      sfx(res.ring>=8?'target':'thud');
+      break;
+    }
+    case'post':a.state='stuck';burst(res.x,res.y,6,'#8a6440',80,400,2,'dot');addText(res.x,res.y-20,'В стойку','#fff');sfx('thud');break;
+    case'balloon':{
+      a.state='gone';
+      const b=S.balloons&&S.balloons.find(b=>b.id===res.bid);
+      if(b){b.dead=true;burst(b.x,b.y,14,b.col,140,200,2.4,'dot')}
+      if(S.range){S.range.score+=15;S.range.last=(S.range.last||0)+15}
+      addText(res.x,res.y-18,'+15 🎈','#ffcf4a',22);sfx('pop');sfx('crate');
+      break;
+    }
     case'crate':{
       a.state='gone';
       openCrate(res.crateId,shooter,res.bonus);
@@ -988,6 +1160,7 @@ function resolveArrow(a,res){
       if(b&&!b.dead)killBird(b,a);
       a.state='gone';
       if(shooter){shooter.hp=Math.min(HP_MAX,shooter.hp+res.heal);shooter.trophies++}
+      if(S.range){S.range.score+=5;S.range.last=(S.range.last||0)+5}
       statOf(a.owner).birds++;
       if(mine(shooter)){track('birds');if(res.type==='goose')track('geese');if(res.roast)track('roasts')}
       addText(res.x,res.y-18,'+'+res.heal+' ❤ '+(res.roast?'Жареная ':'')+BIRDS[res.type].name.toLowerCase()+'!','#ffcf4a',22);
@@ -1005,6 +1178,7 @@ function resolveArrow(a,res){
   }
   const hits=v?v.results:[res];
   const result=hits.length>1?{kind:'multi',hits}:hits[0];
+  noteVolley(shooter,hits);
   // «Тройной удар»: две стрелы одного залпа попали во врагов
   if(hits.length===3&&mine(shooter)&&hits.filter(r=>r.kind==='player'&&!r.shield&&S.by[r.id]&&S.by[r.id].team!==shooter.team).length>=2)track('triples');
   S.volley=null;S.flying=null;S.state='settle';
@@ -1251,9 +1425,11 @@ function simShot(ox,oy,vx,vy,wind,shooter){
 }
 function findShot(p,windEst){
   const sp=shoulderPos(p),f=p.team==='left'?1:-1,c=[];
-  for(let deg=-78;deg<=12;deg+=1.5){
+  // фоновой партии в меню хватит грубого перебора: телефон не должен подтормаживать
+  const da=mode==='demo'?3:1.5,dd=mode==='demo'?0.05:0.025;
+  for(let deg=-78;deg<=12;deg+=da){
     const l=deg*Math.PI/180,ang=f===1?l:Math.PI-l;
-    for(let d=0.22;d<=1.0001;d+=0.025){
+    for(let d=0.22;d<=1.0001;d+=dd){
       const v=VMAX*d,r=simShot(sp.x+Math.cos(ang)*16,sp.y+Math.sin(ang)*16,Math.cos(ang)*v,Math.sin(ang)*v,windEst,p);
       let score=r.friendly?1e6:r.hit?(r.hit==='head'?-3:r.hit==='torso'?-2.5:-1)+r.t*0.05:r.dist/10;
       score+=r.crowns*0.9; // крона может остановить стрелу — ИИ предпочитает чистую траекторию
@@ -1330,6 +1506,7 @@ function winnerByHp(){
 }
 function endGame(w){
   if(S.over)return;
+  if(mode==='demo'){S.over=true;S.winner=w;S.state='over';S.demoT=0;return} // фоновая партия: без итогов, скоро новая
   S.over=true;S.winner=w;S.state='over';S.overT=1.3;input.drawing=false;
   if(mode!=='online'){
     S.score[w]++;
@@ -1348,6 +1525,16 @@ function teamLabel(t){return members(t).length>1?TEAM[t].name:(S.by[members(t)[0
 function showOver(){
   const w=S.winner,mineWon=mode==='online'?(NET.slot&&teamOf(NET.slot)===w):w==='left';
   let title,sub;
+  if(S.opts.range){
+    const R=S.range;
+    title='🎯 '+R.score+' '+plural(R.score,'очко','очка','очков');
+    sub=R.record?'🏆 Новый рекорд!'+(R.best?' Прошлый: '+R.best:''):'Рекорд: '+(PROG.rangeBest||0);
+    $('overTitle').textContent=title;$('overSub').textContent=sub;
+    renderRangeStats();renderMedals();
+    $('btnRematch').textContent='🔄 Ещё раз';
+    $('over').classList.add('show');
+    return;
+  }
   if(S.opts.coop){
     if(w==='left'){title='🌊 Волна '+(S.wave-1)+' отбита!';sub='Дальше — волна '+S.wave+' · здоровье +30'}
     else{title='💀 Отряд пал на волне '+S.wave;sub='Отбито волн: '+(S.wave-1)+(PROG.waveBest?' · рекорд: '+(PROG.waveBest-1):'')}
@@ -1358,7 +1545,7 @@ function showOver(){
     sub='Счёт: '+TEAM.left.name+' '+S.score.left+' : '+S.score.right+' '+TEAM.right.name+(S.opts.wins?' · до '+S.opts.wins+' побед':'');
   }
   $('overTitle').textContent=title;$('overSub').textContent=sub;
-  renderStats();
+  renderStats();renderMedals();
   $('btnRematch').textContent=S.matchOver?(S.opts.coop?'🔄 Заново':'🔄 Новый матч'):S.opts.coop?'▶ Дальше':'🔄 Реванш';
   $('over').classList.add('show');
   // вместе против ИИ: следующая волна начинается сама (в онлайне её запускает ведущий)
@@ -1400,9 +1587,11 @@ function syncHp(hp){
   if(!hp)return;
   for(const id in hp){const a=S.by[id];if(!a)continue;a.hp=hp[id];if(a.hp<=0&&!a.dead)killArcher(a)}
 }
+function plural(n,a,b,c){n=Math.abs(n)%100;const k=n%10;return n>10&&n<20?c:k===1?a:k>=2&&k<=4?b:c}
 function rematch(){
   if(!S)return;
   if(mode==='online'){netSend({action:'restart'});return}
+  if(S.opts.range){startLocal('range');return}
   const weather=pickWeather(S.opts.weather);
   if(S.opts.coop){
     // следующая волна (здоровье переходит, +30) или новый забег
@@ -1451,8 +1640,10 @@ const ACH=[
   {id:'win5',   name:'Победитель',        desc:'5 побед (против ИИ или онлайн)',           test:p=>p.wins>=5,   reward:'hat:viking'},
   {id:'win20',  name:'Чемпион',           desc:'20 побед',                                 test:p=>p.wins>=20,  reward:'hat:crown'},
   {id:'wave5',  name:'Стойкий отряд',     desc:'Дойди до 5-й волны вместе против ИИ',      test:p=>p.waveBest>=5},
+  {id:'range80',name:'Меткий глаз',       desc:'Набери 80 очков в тире',                   test:p=>p.rangeBest>=80},
+  {id:'range150',name:'Мастер тира',      desc:'Набери 150 очков в тире',                  test:p=>p.rangeBest>=150,reward:'hat:feather2'},
 ];
-const HAT_NAMES={none:'Без шапки',cap:'Кепка',hood:'Капюшон',feather:'Шляпа с пером',helmet:'Шлем',viking:'Рогатый шлем',crown:'Корона'};
+const HAT_NAMES={none:'Без шапки',cap:'Кепка',hood:'Капюшон',feather:'Шляпа с пером',helmet:'Шлем',viking:'Рогатый шлем',crown:'Корона',feather2:'Берет стрелка'};
 const FLETCH_NAMES={team:'Цвет команды',gold:'Золотое',rainbow:'Радужное',black:'Чёрное'};
 const FREE={'hat:none':1,'hat:cap':1,'hat:hood':1,'fletch:team':1};
 function unlocked(key){return !!FREE[key]||ACH.some(a=>a.reward===key&&PROG.got[a.id])}
@@ -1498,6 +1689,7 @@ function drawHat(hat,x,f,dark){
   else if(hat==='helmet'){ctx.fillStyle='#9aa1aa';ctx.beginPath();ctx.arc(0,-1,8.3,Math.PI,0);ctx.fill();ctx.fillRect(-8.3,-2,16.6,2.5);ctx.fillStyle='#7d838c';ctx.fillRect(f*2-1,-2,2,7)}
   else if(hat==='viking'){ctx.fillStyle='#9aa1aa';ctx.beginPath();ctx.arc(0,-1,8.3,Math.PI,0);ctx.fill();ctx.fillStyle='#f3ead2';
     for(const s of [-1,1]){ctx.beginPath();ctx.moveTo(s*6,-5);ctx.quadraticCurveTo(s*14,-7,s*13,-16);ctx.quadraticCurveTo(s*10,-9,s*4,-8);ctx.fill()}}
+  else if(hat==='feather2'){ctx.fillStyle='#2f3a5e';ctx.beginPath();ctx.ellipse(-f*1,-4,9,4,f*0.15,0,7);ctx.fill();ctx.strokeStyle='#ffcf4a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-f*4,-6);ctx.quadraticCurveTo(-f*12,-18,-f*17,-15);ctx.stroke();ctx.strokeStyle='#e0503b';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-f*5,-6);ctx.quadraticCurveTo(-f*11,-14,-f*15,-12);ctx.stroke()}
   else if(hat==='crown'){ctx.fillStyle='#ffcf4a';ctx.beginPath();ctx.moveTo(-7,-5);ctx.lineTo(-7,-12);ctx.lineTo(-3.5,-8);ctx.lineTo(0,-13);ctx.lineTo(3.5,-8);ctx.lineTo(7,-12);ctx.lineTo(7,-5);ctx.closePath();ctx.fill();ctx.fillStyle='#e0503b';ctx.beginPath();ctx.arc(0,-7.5,1.4,0,7);ctx.fill()}
   ctx.restore();
 }
@@ -1511,8 +1703,12 @@ function renderProgress(){
   $('skinHat').innerHTML=opt(HAT_NAMES,'hat',sk.hat);
   $('skinFletch').innerHTML=opt(FLETCH_NAMES,'fletch',sk.fletch);
   const got=ACH.filter(a=>PROG.got[a.id]).length;
-  $('achTitle').textContent='Достижения: '+got+' из '+ACH.length+(PROG.waveBest?' · рекорд волн: '+PROG.waveBest:'');
-  $('achList').innerHTML=ACH.map(a=>'<li class="'+(PROG.got[a.id]?'got':'')+'">'+(PROG.got[a.id]?'✅':'🔒')+' <b>'+a.name+'</b> — '+a.desc+'</li>').join('');
+  $('achTitle').textContent='Достижения: '+got+' из '+ACH.length+(PROG.waveBest?' · рекорд волн: '+PROG.waveBest:'')+(PROG.rangeBest?' · рекорд тира: '+PROG.rangeBest:'');
+  $('achList').innerHTML=ACH.map(a=>{
+    const r=a.reward?' <small class="muted">· '+(a.reward.startsWith('hat:')?'шапка «'+HAT_NAMES[a.reward.slice(4)]+'»':'оперение «'+FLETCH_NAMES[a.reward.slice(7)]+'»')+'</small>':'';
+    return '<li class="'+(PROG.got[a.id]?'got':'')+'"><span class="ai">'+(PROG.got[a.id]?'🏅':'🔒')+'</span><span><b>'+a.name+'</b> — '+a.desc+r+'</span></li>';
+  }).join('');
+  $('rangeBest').textContent=PROG.rangeBest?'· рекорд '+PROG.rangeBest:'';
 }
 function saveSkin(){lsSet('archer_skin',JSON.stringify({hat:$('skinHat').value,fletch:$('skinFletch').value}));renderProgress()}
 
@@ -1542,11 +1738,14 @@ function update(dt){
       if(Math.abs(d)>0.3){p.x+=d*Math.min(1,dt*12);p.walk+=Math.abs(d)*Math.min(1,dt*12)*0.25;p.walkT=0.12}
     }
   }
-  updateArrows(dt);updateBirds(dt);updateCrates(dt);updateTrees(dt);updateFx(dt);updateAmbient(dt);
+  updateArrows(dt);updateBirds(dt);updateCrates(dt);updateTrees(dt);updateFx(dt);updateAmbient(dt);natureTick(dt);updateTargets(dt);
+  // скрип тетивы: чем сильнее натягиваешь, тем выше
+  if(input.drawing&&isHumanTurn()){const step=Math.floor(c.draw*10);if(step>(S.creak||0))sfx('creak');S.creak=step}else S.creak=0;
   if(S.state==='settle'){
     S.settleT-=dt;
     if(S.settleT<=0){
       if(mode==='online'){if(S.pending)applyPending();else S.state='wait'}
+      else if(S.opts.range)rangeNext();
       else{
         const w=winnerByHp();
         if(w)endGame(w);
@@ -1555,6 +1754,7 @@ function update(dt){
     }
   }else if(S.state==='wait'&&S.pending)applyPending();
   if(S.over&&S.overT>0){S.overT-=dt;if(S.overT<=0)showOver()}
+  if(mode==='demo'&&S.over&&(S.demoT=(S.demoT||0)+dt)>3.5){startDemo();return}
   if(mode==='online'&&S.state==='aim'&&iControl(c)){
     S.netT-=dt;
     if(S.netT<=0){
@@ -1748,8 +1948,200 @@ function drawGhost(c){
   ctx.restore();
 }
 let PAUSED=false;
-function drawTargets(){}
-function drawCoach(){}
+// ================= Тир =================
+// 10 стрел по мишеням на том берегу: ближняя ×1, средняя (качается) ×1,5, дальняя ×2; воздушные шары — +15.
+// Режим только для одного устройства, поэтому мишени можно расставлять обычным Math.random.
+const RANGE_SHOTS=10;
+function makeTargets(){
+  const T=[];
+  for(const [x0,x1,hh,r,mult,sway] of [[770,830,42,17,1,0],[905,975,78,15,1.5,1],[1060,1125,48,13,2,0]]){
+    const x=rnd(x0,x1),base=groundAt(x);
+    T.push({x,base,y0:base-hh,y:base-hh,r,mult,sway});
+  }
+  return T;
+}
+function updateTargets(dt){
+  if(!S.targets)return;
+  for(const t of S.targets)if(t.sway)t.y=t.y0+Math.sin(S.time*0.7)*14;
+  S.balloonT-=dt;
+  if(S.balloonT<=0&&!S.over){
+    S.balloonT=rnd(8,13);
+    const x=rnd(720,1150);
+    S.balloons.push({id:++S.birdSeq,x,y:groundAt(x)-10,col:['#e0503b','#ffcf4a','#3b8fe0','#b197fc','#2fb36d'][Math.floor(Math.random()*5)],ph:rnd(0,6)});
+  }
+  for(const b of S.balloons){b.y-=17*dt;b.x+=(S.wind*3+Math.sin(S.time*1.3+b.ph)*6)*dt}
+  S.balloons=S.balloons.filter(b=>!b.dead&&b.y>-40);
+}
+function drawTargets(){
+  if(!S.targets)return;
+  for(const t of S.targets){
+    // стойка и щит с кольцами
+    ctx.strokeStyle='#6b4a2f';ctx.lineWidth=3;line(t.x-6,t.base+2,t.x,t.y+t.r-2);line(t.x+6,t.base+2,t.x,t.y+t.r-2);
+    const rings=['#f4efe2','#2b2b2b','#3b8fe0','#e0503b','#ffcf4a'];
+    for(let i=0;i<5;i++){ctx.fillStyle=rings[i];ctx.beginPath();ctx.arc(t.x,t.y,t.r*(1-i*0.2),0,7);ctx.fill()}
+    ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,7);ctx.stroke();
+    ctx.save();ctx.translate(t.x,t.y-t.r-9);ctx.scale(UI,UI);ctx.font='bold 11px Segoe UI,Arial';ctx.textAlign='center';
+    ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,.6)';const lb='×'+t.mult;ctx.strokeText(lb,0,0);ctx.fillStyle='#fff';ctx.fillText(lb,0,0);ctx.restore();
+  }
+  for(const b of S.balloons){
+    ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(b.x,b.y+10);ctx.quadraticCurveTo(b.x+4,b.y+20,b.x-2,b.y+30);ctx.stroke();
+    ctx.fillStyle=b.col;ctx.beginPath();ctx.ellipse(b.x,b.y,8,10,0,0,7);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.45)';ctx.beginPath();ctx.ellipse(b.x-3,b.y-4,2,3,-0.4,0,7);ctx.fill();
+  }
+}
+// Столкновение стрелы с мишенями и шарами.
+// Мишень — щит, повёрнутый к стрелку: важно, на какой высоте стрела пересекла его плоскость (x = t.x),
+// а не где она впервые коснулась нарисованного круга — иначе почти всегда выходило бы «по краю».
+function hitTargets(a,base){
+  const x=a.x,y=a.y,px=x-a.vx*DT*PPM,py=y-a.vy*DT*PPM;
+  for(let i=0;i<S.targets.length;i++){
+    const t=S.targets[i];
+    if((px-t.x)*(x-t.x)>0||px===x)continue; // за этот шаг плоскость щита не пересекли
+    const k=(t.x-px)/(x-px),yc=py+(y-py)*k,d=Math.abs(yc-t.y);
+    if(d<=t.r){
+      const ring=Math.max(1,10-Math.floor(d/t.r*10));
+      return Object.assign(base,{kind:'target',ti:i,ring,pts:Math.round(ring*t.mult),x:t.x,y:yc});
+    }
+    if(yc>t.y+t.r&&yc<=t.base)return Object.assign(base,{kind:'post',x:t.x,y:yc});
+  }
+  for(const b of S.balloons)if(!b.dead&&(x-b.x)**2+(y-b.y)**2<=110)return Object.assign(base,{kind:'balloon',bid:b.id});
+  return null;
+}
+function rangeNext(){
+  const R=S.range;
+  R.shots.push(R.last||0);R.last=0;R.shot++;
+  if(R.shot>=RANGE_SHOTS){
+    S.over=true;S.state='over';S.winner='left';S.overT=1.2;
+    R.best=PROG.rangeBest||0;R.record=R.score>R.best;
+    trackMax('rangeBest',R.score);
+    sfx('win');
+  }else{S.turnNo++;beginTurn('L0',nextWind())}
+}
+function rangePanel(){
+  const R=S.range,p=S.archers[0],w=270,h=60;
+  ctx.save();ctx.translate(12,10);ctx.scale(UI,UI);
+  ctx.fillStyle='rgba(15,20,34,.72)';rr(0,0,w,h,10);ctx.fill();
+  ctx.font='bold 16px Segoe UI,Arial';ctx.fillStyle='#ffcf4a';ctx.textAlign='left';ctx.fillText('🎯 Тир',12,22);
+  ctx.textAlign='right';ctx.font='13px Segoe UI,Arial';ctx.fillStyle='#cfd6e6';ctx.fillText('рекорд '+(PROG.rangeBest||0),w-12,21);
+  // стрелы в колчане
+  for(let i=0;i<RANGE_SHOTS;i++){
+    const used=i<R.shot,x=14+i*16;
+    ctx.fillStyle=used?'rgba(255,255,255,.18)':p.color;ctx.fillRect(x,34,3,16);
+    ctx.fillStyle=used?'rgba(255,255,255,.18)':'#eee';ctx.beginPath();ctx.moveTo(x-1,34);ctx.lineTo(x+1.5,29);ctx.lineTo(x+4,34);ctx.fill();
+  }
+  ctx.font='bold 22px Segoe UI,Arial';ctx.fillStyle='#fff';ctx.textAlign='right';ctx.fillText(R.score,w-12,50);
+  ctx.restore();
+}
+function renderRangeStats(){
+  const R=S.range,cells=R.shots.map((v,i)=>'<td style="color:'+(v>=15?'#ffcf4a':v>0?'#fff':'#7d869c')+'">'+(v||'—')+'</td>').join('');
+  $('overStats').innerHTML='<table><tr><th>Стрела</th>'+R.shots.map((v,i)=>'<th>'+(i+1)+'</th>').join('')+'</tr><tr><td>Очки</td>'+cells+'</tr></table>';
+}
+
+// ================= Серии, объявления, награды =================
+// Серия: подряд ходы с попаданием во врага. Считается по результатам выстрелов — у всех одинаково.
+function noteVolley(shooter,hits){
+  if(!shooter||S.opts.range)return;
+  const enemy=hits.filter(r=>r.kind==='player'&&!r.shield&&S.by[r.id]&&S.by[r.id].team!==shooter.team);
+  const n=enemy.length?(S.streak[shooter.id]||0)+1:0;
+  S.streak[shooter.id]=n;
+  const st=statOf(shooter.id);st.best=Math.max(st.best||0,n);
+  const kill=enemy.some(r=>S.by[r.id].hp<=0),head=enemy.some(r=>r.zone==='head');
+  if(enemy.length>=2)showBanner('💥 Двойное попадание!','#ffb13b');
+  else if(kill&&head)showBanner('☠ ХЕДШОТ!','#ffcf4a');
+  else if(kill)showBanner('☠ '+nameOf(enemy[0].id)+' выбит','#ff9a8a');
+  else if(n>=2){showBanner('🔥 Серия ×'+n,'#ffb13b');sfx('streak')}
+}
+// Награды на экране итогов: лучшие по меткости, урону, хедшотам, серии; охотник и лесоруб
+function renderMedals(){
+  const box=$('overMedals');box.innerHTML='';
+  const list=[];
+  if(S.opts.range){
+    const R=S.range,best=Math.max(0,...R.shots);
+    if(R.record)list.push(['🏆','Новый рекорд',R.score+' очков']);
+    if(best>0)list.push(['🎯','Лучший выстрел',best+' очков']);
+    const tens=R.shots.filter(v=>v>=10).length;if(tens)list.push(['✨','Точные попадания',tens+' из '+RANGE_SHOTS]);
+  }else{
+    const A=S.archers.map(a=>({a,s:statOf(a.id)}));
+    const top=(f,min)=>{let b=null;for(const x of A){const v=f(x.s);if(v>=min&&(!b||v>b.v))b={a:x.a,v}}return b};
+    const acc=top(s=>s.shots>=2?s.hits/s.shots:-1,0.01);
+    if(acc)list.push(['🎯','Снайпер',nameOf(acc.a.id)+' · '+Math.round(acc.v*100)+'%']);
+    const dmg=top(s=>s.dmg,1);if(dmg)list.push(['💥','Больше всех урона',nameOf(dmg.a.id)+' · '+dmg.v]);
+    const hd=top(s=>s.heads,1);if(hd)list.push(['☠','Хедшоты',nameOf(hd.a.id)+' · '+hd.v]);
+    const sk=top(s=>s.best||0,2);if(sk)list.push(['🔥','Лучшая серия',nameOf(sk.a.id)+' · ×'+sk.v]);
+    const bd=top(s=>s.birds,1);if(bd)list.push(['🐦','Охотник',nameOf(bd.a.id)+' · '+bd.v]);
+    const tr=top(s=>s.trees,1);if(tr)list.push(['🌳','Лесоруб',nameOf(tr.a.id)+' · '+tr.v]);
+  }
+  list.slice(0,4).forEach((m,i)=>{
+    const d=document.createElement('div');d.className='medal';d.style.animationDelay=(0.15+i*0.12)+'s';
+    d.innerHTML='<span class="mi">'+m[0]+'</span><b>'+escHtml(m[1])+'</b><span>'+escHtml(m[2])+'</span>';
+    box.append(d);
+  });
+}
+
+// Подсказка новичку: анимированный «палец» показывает, как натянуть лук (первые три выстрела)
+let coachN=+(lsGet('archer_coach')||0);
+function drawCoach(){
+  if(!SETTINGS.coach||coachN>=3||!S||!isHumanTurn()||input.drawing||PAUSED||(S.intro&&S.intro.t>0))return;
+  const p=cur(),f=p.team==='left'?1:-1,gy=groundAt(p.x);
+  const t=(S.time%2.6)/2.6,k=smooth(0.15,0.72,t);
+  const sx=clamp(p.x+f*170,140,W-140),sy=gy-190,ex=sx-f*120,ey=sy+78,x=sx+(ex-sx)*k,y=sy+(ey-sy)*k,press=t>0.1&&t<0.8;
+  ctx.save();ctx.globalAlpha=t>0.88?Math.max(0,1-(t-0.88)*8):1;
+  ctx.setLineDash([5,6]);ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=2;line(sx,sy,x,y);ctx.setLineDash([]);
+  ctx.strokeStyle='rgba(255,255,255,.6)';ctx.beginPath();ctx.arc(sx,sy,9,0,7);ctx.stroke();
+  ctx.fillStyle=press?'rgba(255,207,74,.95)':'rgba(255,255,255,.9)';ctx.shadowColor='rgba(0,0,0,.5)';ctx.shadowBlur=8;
+  ctx.beginPath();ctx.arc(x,y,press?11:13,0,7);ctx.fill();ctx.shadowBlur=0;
+  ctx.restore();
+  ctx.save();ctx.translate(sx,sy-34);ctx.scale(UI,UI);ctx.textAlign='center';
+  const l1='Зажмите и тяните назад',l2='отпустите — выстрел';
+  ctx.font='bold 15px Segoe UI,Arial';const tw=Math.max(ctx.measureText(l1).width,130)+28;
+  ctx.fillStyle='rgba(10,14,24,.78)';rr(-tw/2,-36,tw,46,10);ctx.fill();
+  ctx.fillStyle='#ffe7a8';ctx.fillText(l1,0,-15);ctx.font='13px Segoe UI,Arial';ctx.fillStyle='#dfe5f2';ctx.fillText(l2,0,3);
+  ctx.restore();
+  if(coachN===0){
+    ctx.save();ctx.translate(W*0.24,H*0.915);ctx.scale(UI,UI);ctx.textAlign='center';ctx.font='bold 13px Segoe UI,Arial';
+    const bob=Math.sin(S.time*4)*3;ctx.fillStyle='rgba(10,14,24,.78)';rr(-96,-24+bob,192,24,8);ctx.fill();
+    ctx.fillStyle='#dfe5f2';ctx.fillText('◀ ▶ — шаги перед выстрелом',0,-8+bob);ctx.restore();
+  }
+}
+function coachShot(p){if(ctrlOf(p)==='human'&&coachN<3){coachN++;lsSet('archer_coach',String(coachN))}}
+
+// ---- Меню: вкладки, настройки устройства, сводка правил партии ----
+function setTab(t){
+  if(!$('tab-'+t))t='play';
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+  document.querySelectorAll('.tab').forEach(s=>s.classList.toggle('on',s.id==='tab-'+t));
+  lsSet('archer_tab',t);
+}
+function syncPrefs(){
+  $('pfGfx').value=SETTINGS.gfx;$('pfTod').value=SETTINGS.tod;$('pfShake').value=String(SETTINGS.shake);
+  $('pfCam').checked=!!SETTINGS.cam;$('pfGhost').checked=!!SETTINGS.ghost;$('pfCoach').checked=!!SETTINGS.coach;
+  $('pfMaster').value=SETTINGS.master;$('pfMusic').value=SETTINGS.music;$('pfSfx').value=SETTINGS.sfx;$('pfAmb').value=SETTINGS.ambient;
+}
+function applySettings(k){
+  if(k==='gfx'&&S){initAmbient();vignette=null}
+  if(['master','music','sfx','ambient'].includes(k)){audioInit();applyAudio()}
+  if(k==='coach'&&SETTINGS.coach){coachN=0;lsSet('archer_coach','0')}
+}
+function updateQuick(){
+  const o=opts,d={easy:'лёгкий',normal:'средний',hard:'сложный'}[o.diff]||'средний',tr={none:'без деревьев',few:'мало деревьев',many:'много деревьев'}[o.trees]||'';
+  const on=[o.wind&&'ветер',o.birds&&'птицы',o.specials!==false&&'особые стрелы',o.crates!==false&&'ящики',o.weather!==false&&'погода',o.cover!==false&&'укрытия'].filter(Boolean);
+  $('quickSetup').innerHTML=(o.size===2?'2 на 2':'1 на 1')+' · ИИ: '+d+' · '+tr+(o.timer?' · '+o.timer+' с на ход':'')+(o.wins?' · до '+o.wins+' побед':'')+
+    '<br>'+(on.length?on.join(', '):'без дополнений')+' — <a onclick="setTab(\'setup\')">изменить</a>';
+}
+function initMenuUi(){
+  document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{setTab(b.dataset.tab);audioInit();uiClick()}));
+  setTab(lsGet('archer_tab')||'play');
+  document.querySelectorAll('#tab-setup select,#tab-setup input').forEach(el=>el.addEventListener('change',()=>{readOpts();updateQuick()}));
+  const bind=(id,key,conv)=>{const el=$(id);el.addEventListener(el.type==='range'?'input':'change',()=>{SETTINGS[key]=conv(el.type==='checkbox'?el.checked:el.value);saveSettings();applySettings(key)})};
+  bind('pfGfx','gfx',v=>v);bind('pfTod','tod',v=>v);bind('pfShake','shake',v=>+v);
+  bind('pfCam','cam',v=>!!v);bind('pfGhost','ghost',v=>!!v);bind('pfCoach','coach',v=>!!v);
+  for(const [id,k] of [['pfMaster','master'],['pfMusic','music'],['pfSfx','sfx'],['pfAmb','ambient']])bind(id,k,v=>+v);
+  syncPrefs();updateQuick();
+  // звук можно включить только после первого касания страницы
+  const wake=()=>{audioInit();removeEventListener('pointerdown',wake);removeEventListener('keydown',wake)};
+  addEventListener('pointerdown',wake);addEventListener('keydown',wake);
+  $('menuFoot').textContent='Лучник 2.0 · время суток, музыка, кинокамера и тир';
+}
 // заставка раунда: «Раунд 2 · Закат · Дождь» с кинематографичными полосами
 function drawIntro(){
   const I=S.intro;if(!I||I.t<=0)return;
@@ -1952,7 +2344,7 @@ function drawArcher(p){
     ctx.fillStyle='rgba(159,211,255,.12)';ctx.beginPath();ctx.ellipse(p.x,gy-28,22,34,0,0,7);ctx.fill();ctx.stroke();ctx.restore();
   }
   // подпись и указатель хода
-  const many=S.archers.length>2||mode==='online';
+  const many=(S.archers.length>2||mode==='online')&&mode!=='demo';
   const isTurn=S.turn===p.id&&!S.over&&!p.dead;
   ctx.save();ctx.translate(p.x,gy-62);ctx.scale(UI,UI);ctx.textAlign='center';
   if(many&&!p.dead){
@@ -2086,14 +2478,15 @@ function teamPanel(team,right){
   ctx.restore();
 }
 function drawHUD(){
-  teamPanel('left',false);teamPanel('right',true);
+  if(S.range)rangePanel();
+  else{teamPanel('left',false);teamPanel('right',true)}
   ctx.save();ctx.translate(W/2,10);ctx.scale(UI,UI);ctx.translate(-W/2,0);
   const cw=270,cx=W/2-cw/2,y=0;
   ctx.fillStyle='rgba(15,20,34,.72)';rr(cx,y,cw,60,10);ctx.fill();
   ctx.textAlign='center';ctx.font='bold 16px Segoe UI,Arial';
   const cp=cur();
   ctx.fillStyle=S.over?'#ffcf4a':cp.color;
-  ctx.fillText(S.over?'Игра окончена':'Ход: '+nameOf(S.turn),W/2,y+22);
+  ctx.fillText(S.over?'Игра окончена':S.range?'Стрела '+Math.min(RANGE_SHOTS,S.range.shot+1)+' / '+RANGE_SHOTS:'Ход: '+nameOf(S.turn),W/2,y+22);
   if(S.opts.timer&&S.state==='aim'&&!S.over){
     const left=Math.max(0,Math.ceil(S.turnT));
     ctx.textAlign='left';ctx.font='bold 14px Segoe UI,Arial';ctx.fillStyle=left<=5?'#ff7a6a':'#cfd6e6';
@@ -2110,7 +2503,7 @@ function drawHUD(){
   }
   ctx.textAlign='center';ctx.font='12px Segoe UI,Arial';ctx.fillStyle='rgba(255,255,255,.85)';
   const WE=WEATHER[S.weather]||WEATHER.clear;
-  const sc=S.opts.coop?'🌊 Волна '+S.wave:'Счёт '+S.score.left+' : '+S.score.right+(S.opts.wins?' (до '+S.opts.wins+')':'');
+  const sc=S.range?'Очки: '+S.range.score:S.opts.coop?'🌊 Волна '+S.wave:'Счёт '+S.score.left+' : '+S.score.right+(S.opts.wins?' (до '+S.opts.wins+')':'');
   ctx.fillText(sc+(WE.name?'   ·   '+WE.icon+' '+WE.name:''),W/2,y+76);
   const nn=netNotice();
   if(nn){
@@ -2128,10 +2521,18 @@ function drawHUD(){
     ctx.restore();
   }
   if(S.banner){
-    const b=S.banner,al=Math.min(1,b.t*2),by=130+70*UI;
-    ctx.globalAlpha=al;ctx.font='800 '+Math.round(40*UI)+'px Segoe UI,Arial';ctx.textAlign='center';
-    ctx.lineWidth=6;ctx.strokeStyle='rgba(0,0,0,.45)';ctx.strokeText(b.text,W/2,by);
-    ctx.fillStyle=b.color;ctx.fillText(b.text,W/2,by);ctx.globalAlpha=1;
+    // плашка с акцентной линией цвета игрока, появляется «пружинкой»
+    const b=S.banner,age=1.5-b.t,al=Math.min(1,b.t*2.2),by=130+70*UI,sc=UI*(age<0.22?0.75+0.25*easeOutBack(age/0.22):1);
+    ctx.save();ctx.globalAlpha=al;ctx.translate(W/2,by);ctx.scale(sc,sc);
+    ctx.font='800 36px Segoe UI,Arial';ctx.textAlign='center';
+    const tw=ctx.measureText(b.text).width+70;
+    const g=ctx.createLinearGradient(-tw/2,0,tw/2,0);
+    g.addColorStop(0,'rgba(10,14,24,0)');g.addColorStop(0.18,'rgba(10,14,24,.62)');g.addColorStop(0.82,'rgba(10,14,24,.62)');g.addColorStop(1,'rgba(10,14,24,0)');
+    ctx.fillStyle=g;ctx.fillRect(-tw/2,-38,tw,54);
+    ctx.fillStyle=b.color;ctx.fillRect(-tw*0.3,12,tw*0.6,2.5);
+    ctx.lineWidth=6;ctx.strokeStyle='rgba(0,0,0,.45)';ctx.strokeText(b.text,0,0);
+    ctx.fillStyle=b.color;ctx.fillText(b.text,0,0);
+    ctx.restore();
   }
 }
 function draw(){
@@ -2214,13 +2615,133 @@ function frame(ts){
 }
 
 // ================= Звук =================
+// Звук собран из трёх каналов с общей громкостью: эффекты, музыка, природа (река, ветер, птицы, сверчки).
+// Всё синтезируется на лету — никаких файлов, игра остаётся одним HTML.
 let AC=null,soundOn=lsGet('archer_sound')!=='0';
-function audioInit(){if(!AC){try{AC=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==='suspended')AC.resume()}
-function toggleSound(){soundOn=!soundOn;lsSet('archer_sound',soundOn?'1':'0');$('btnSound').textContent=soundOn?'🔊':'🔇'}
-function tone(f,d,type,vol,slide){const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type=type;o.frequency.setValueAtTime(f,t);if(slide)o.frequency.linearRampToValueAtTime(Math.max(30,f+slide),t+d);g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+d);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+d+0.02)}
-function noise(d,vol,ff){const n=Math.floor(AC.sampleRate*d),buf=AC.createBuffer(1,n,AC.sampleRate),ch=buf.getChannelData(0);for(let i=0;i<n;i++)ch[i]=(Math.random()*2-1)*(1-i/n);const s=AC.createBufferSource();s.buffer=buf;const fl=AC.createBiquadFilter();fl.type='lowpass';fl.frequency.value=ff;const g=AC.createGain();g.gain.value=vol;s.connect(fl).connect(g).connect(AC.destination);s.start()}
+const AU={};
+function audioInit(){
+  if(!AC){try{AC=new(window.AudioContext||window.webkitAudioContext)();buildAudio()}catch(e){AC=null}}
+  if(AC&&AC.state==='suspended'&&!document.hidden)AC.resume();
+}
+function buildAudio(){
+  AU.master=AC.createGain();AU.master.connect(AC.destination);
+  // мягкий лимитер, чтобы наложение звуков не хрипело
+  AU.comp=AC.createDynamicsCompressor();AU.comp.threshold.value=-14;AU.comp.ratio.value=6;AU.comp.connect(AU.master);
+  AU.sfx=AC.createGain();AU.sfx.connect(AU.comp);
+  AU.music=AC.createGain();AU.music.connect(AU.comp);
+  AU.amb=AC.createGain();AU.amb.connect(AU.comp);
+  applyAudio();startNature();startMusic();
+}
+function applyAudio(){
+  if(!AC||!AU.master)return;
+  const t=AC.currentTime;
+  AU.master.gain.setTargetAtTime(soundOn?SETTINGS.master:0,t,0.06);
+  AU.sfx.gain.setTargetAtTime(SETTINGS.sfx,t,0.05);
+  AU.music.gain.setTargetAtTime(SETTINGS.music*0.55,t,0.3);
+  AU.amb.gain.setTargetAtTime(SETTINGS.ambient*0.9,t,0.3);
+}
+function toggleSound(){soundOn=!soundOn;lsSet('archer_sound',soundOn?'1':'0');$('btnSound').textContent=soundOn?'🔊':'🔇';audioInit();applyAudio()}
+function toggleMusic(){
+  if(SETTINGS.music>0){SETTINGS.musicPrev=SETTINGS.music;SETTINGS.music=0}else SETTINGS.music=SETTINGS.musicPrev||0.45;
+  saveSettings();applyAudio();syncPrefs();if(pauseShown())pauseSync();
+}
+function tone(f,d,type,vol,slide,dest,at){
+  const o=AC.createOscillator(),g=AC.createGain(),t=at||AC.currentTime;o.type=type;o.frequency.setValueAtTime(f,t);
+  if(slide)o.frequency.linearRampToValueAtTime(Math.max(30,f+slide),t+d);
+  g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(vol,t+0.006);g.gain.exponentialRampToValueAtTime(0.0008,t+d);
+  o.connect(g).connect(dest||AU.sfx);o.start(t);o.stop(t+d+0.03);
+}
+let noiseBuf=null;
+function noiseBuffer(){
+  if(noiseBuf)return noiseBuf;
+  const n=AC.sampleRate*2;noiseBuf=AC.createBuffer(1,n,AC.sampleRate);const ch=noiseBuf.getChannelData(0);
+  for(let i=0;i<n;i++)ch[i]=Math.random()*2-1;
+  return noiseBuf;
+}
+function noise(d,vol,ff,dest,type){
+  const s=AC.createBufferSource(),t=AC.currentTime;s.buffer=noiseBuffer();
+  const fl=AC.createBiquadFilter();fl.type=type||'lowpass';fl.frequency.value=ff;
+  const g=AC.createGain();g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0008,t+d);
+  s.connect(fl).connect(g).connect(dest||AU.sfx);s.start(t,Math.random()*1.5);s.stop(t+d+0.05);
+}
+// --- природа: река и ветер — бесконечные шумы с фильтрами; птицы днём, сверчки ночью ---
+function loopNoise(type,freq,q){
+  const s=AC.createBufferSource();s.buffer=noiseBuffer();s.loop=true;
+  const f=AC.createBiquadFilter();f.type=type;f.frequency.value=freq;if(q)f.Q.value=q;
+  const g=AC.createGain();g.gain.value=0;s.connect(f).connect(g).connect(AU.amb);s.start();
+  return{f,g};
+}
+function startNature(){
+  AU.river=loopNoise('bandpass',520,0.7);
+  AU.wind=loopNoise('lowpass',420);
+  AU.natT=0;
+}
+function natureTick(dt){
+  if(!AC||!AU.river)return;
+  const t=AC.currentTime,on=!!S&&$('game').classList.contains('active');
+  AU.river.g.gain.setTargetAtTime(on?0.07:0,t,0.5);
+  const w=on&&S.opts.wind?Math.min(1,Math.abs(S.wind)/8):0,gust=0.75+0.25*Math.sin(t*0.7)*Math.sin(t*1.9);
+  AU.wind.g.gain.setTargetAtTime(on?0.012+w*0.11*gust:0,t,0.4);
+  AU.wind.f.frequency.setTargetAtTime(260+w*700*gust,t,0.4);
+  if(!on||!soundOn||SETTINGS.ambient<=0)return;
+  AU.natT-=dt;
+  if(AU.natT>0)return;
+  if(todKey==='night'){
+    AU.natT=rnd(0.6,1.4);
+    // сверчок: пачка коротких высоких импульсов
+    for(let i=0;i<3;i++)tone(4200+rnd(-80,80),0.035,'sine',0.012,0,AU.amb,AC.currentTime+i*0.07);
+  }else if(S.weather!=='rain'){
+    AU.natT=rnd(2.5,6);
+    // птичья трель: несколько скользящих свистов
+    const base=rnd(2200,3400),n=2+Math.floor(Math.random()*4);
+    for(let i=0;i<n;i++)tone(base+rnd(-300,300),0.09,'sine',0.018,rnd(-600,700),AU.amb,AC.currentTime+i*0.11);
+  }else AU.natT=2;
+}
+// --- музыка: спокойная лютня и подклад в ре-миноре (Dm – B♭ – F – C), генерируется бесконечно ---
+const MUSIC={step:0,next:0,timer:null};
+const NOTE=n=>440*Math.pow(2,(n-69)/12);
+const PROG_CH=[[50,53,57],[46,50,53],[53,57,60],[48,52,55]]; // аккорды (MIDI)
+const SCALE=[62,64,65,67,69,72,74,76,77];
+function pluck(freq,t,vol,dur){
+  // «лютня»: треугольник + немного пилы через фильтр, быстрая атака и долгий спад
+  const o=AC.createOscillator(),o2=AC.createOscillator(),f=AC.createBiquadFilter(),g=AC.createGain();
+  o.type='triangle';o2.type='sawtooth';o.frequency.value=freq;o2.frequency.value=freq*1.003;
+  f.type='lowpass';f.frequency.setValueAtTime(2600,t);f.frequency.exponentialRampToValueAtTime(700,t+dur);
+  g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(vol,t+0.008);g.gain.exponentialRampToValueAtTime(0.0006,t+dur);
+  const g2=AC.createGain();g2.gain.value=0.25;
+  o.connect(f);o2.connect(g2).connect(f);f.connect(g).connect(AU.music);
+  o.start(t);o2.start(t);o.stop(t+dur+0.05);o2.stop(t+dur+0.05);
+}
+function pad(notes,t,dur){
+  for(const n of notes){
+    const o=AC.createOscillator(),f=AC.createBiquadFilter(),g=AC.createGain();
+    o.type='sawtooth';o.frequency.value=NOTE(n-12);o.detune.value=rnd(-7,7);
+    f.type='lowpass';f.frequency.value=520;
+    g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(0.018,t+dur*0.4);g.gain.linearRampToValueAtTime(0.0001,t+dur);
+    o.connect(f).connect(g).connect(AU.music);o.start(t);o.stop(t+dur+0.05);
+  }
+}
+function startMusic(){
+  const EIGHTH=0.36;
+  MUSIC.next=AC.currentTime+0.3;
+  MUSIC.timer=setInterval(()=>{
+    if(!AC||AC.state!=='running'||SETTINGS.music<=0||!soundOn)return;
+    while(MUSIC.next<AC.currentTime+0.5){
+      const st=MUSIC.step,bar=Math.floor(st/8)%PROG_CH.length,pos=st%8,ch=PROG_CH[bar],t=MUSIC.next;
+      if(pos===0){pad(ch,t,EIGHTH*8);pluck(NOTE(ch[0]-12),t,0.05,2.2)}
+      // перебор: аккорд вверх и вниз, изредка — мелодическая нота
+      const arp=[0,1,2,1,0,2,1,2][pos];
+      if(pos!==0||Math.random()<0.5)pluck(NOTE(ch[arp]+(pos>3?12:0)),t,0.032,1.4);
+      if((pos===3||pos===6)&&Math.random()<0.55)pluck(NOTE(SCALE[Math.floor(Math.random()*SCALE.length)]),t+EIGHTH*0.5,0.03,1.6);
+      MUSIC.step++;MUSIC.next+=EIGHTH*(pos%2?0.94:1.06); // лёгкий свинг — живее
+    }
+  },120);
+}
+// глушим звук, когда игра свёрнута (экономия батареи)
+document.addEventListener('visibilitychange',()=>{if(!AC)return;if(document.hidden)AC.suspend().catch(()=>{});else if(soundOn)AC.resume().catch(()=>{})});
+function uiClick(){if(AC&&soundOn)tone(900,0.04,'sine',0.05,-200)}
 function sfx(n){
-  if(!soundOn||!AC)return;
+  if(!soundOn||!AC||mode==='demo')return;
   try{switch(n){
     case'twang':tone(190,0.18,'triangle',0.22,-90);noise(0.07,0.12,2600);break;
     case'thud':noise(0.12,0.3,450);tone(95,0.1,'sine',0.25,-40);break;
@@ -2234,25 +2755,42 @@ function sfx(n){
     case'crate':[660,880,1100].forEach((f,i)=>setTimeout(()=>{try{tone(f,0.12,'triangle',0.14,0)}catch(e){}},i*70));break;
     case'pop':tone(520,0.07,'sine',0.12,260);break;
     case'horn':tone(196,0.55,'sawtooth',0.05,0);tone(294,0.55,'triangle',0.08,0);setTimeout(()=>{try{tone(392,0.7,'triangle',0.09,0);tone(262,0.7,'sawtooth',0.04,0)}catch(e){}},260);break;
+    case'creak':tone(110+rnd(0,60),0.07,'sawtooth',0.025,40);break;
+    case'streak':[784,988,1175].forEach((f,i)=>setTimeout(()=>{try{tone(f,0.16,'triangle',0.12,0)}catch(e){}},i*60));break;
+    case'target':tone(1046,0.22,'sine',0.14,0);tone(1568,0.3,'sine',0.08,0);break;
     case'win':[523,659,784].forEach((f,i)=>setTimeout(()=>{try{tone(f,0.25,'triangle',0.18,0)}catch(e){}},i*140));break;
   }}catch(e){}
 }
 
 // ================= Экраны и адаптивность =================
 let RS=1,UI=1,rotateDismissed=false;
+// Меню и лобби показываются поверх фоновой партии ботов (живая сцена вместо пустого фона)
 function show(id){
-  for(const s of ['menu','lobby','game'])$(s).classList.toggle('active',s===id);
-  if(id==='game')fit();else $('rotate').classList.remove('show');
+  const over=id==='menu'||id==='lobby';
+  $('menu').classList.toggle('active',id==='menu');$('lobby').classList.toggle('active',id==='lobby');
+  $('game').classList.add('active');$('game').classList.toggle('demo',over);
+  if(over){$('rotate').classList.remove('show');pauseClose();ensureDemo()}
+  fit();
+}
+function ensureDemo(){if(!S)startDemo()}
+function startDemo(){
+  mode='demo';
+  const ids=Math.random()<0.35?SLOT_ORDER.slice():['L0','R0'];
+  newMatch({seed:randSeed(),starter:Math.random()<0.5?'left':'right',score:{left:0,right:0},active:ids,weather:pickWeather(true),
+    opts:{wind:true,birds:true,trees:Math.random()<0.5?'few':'many',diff:'normal',size:ids.length>2?2:1,bots:true,timer:0,specials:true,crates:true,weather:true,cover:true,wins:0,coop:false}});
 }
 // Вписываем поле 1200×640 в экран с сохранением пропорций; холст рисуем в разрешении экрана (резкость на телефонах)
 function fit(){
   const g=$('game');if(!g.classList.contains('active'))return;
   const portrait=innerHeight>innerWidth&&innerWidth<760;
-  $('rotate').classList.toggle('show',portrait&&!rotateDismissed);
+  $('rotate').classList.toggle('show',portrait&&!rotateDismissed&&!g.classList.contains('demo'));
   const showHint=innerHeight>=560&&matchMedia('(pointer:fine)').matches;
   $('hint').style.display=showHint?'':'none';
-  const st=$('stage'),aw=st.clientWidth-8,ah=st.clientHeight-8;
-  const s=Math.max(0.1,Math.min(aw/W,ah/H)),cw=Math.floor(W*s),ch=Math.floor(H*s);
+  const demo=g.classList.contains('demo');
+  if(demo)$('rotate').classList.remove('show');
+  const st=$('stage'),aw=st.clientWidth-(demo?0:8),ah=st.clientHeight-(demo?0:8);
+  // фоновая сцена заполняет экран целиком, игра — вписывается с полями
+  const s=Math.max(0.1,demo?Math.max(aw/W,ah/H):Math.min(aw/W,ah/H)),cw=Math.floor(W*s),ch=Math.floor(H*s);
   $('wrap').style.width=cw+'px';$('wrap').style.height=ch+'px';
   g.classList.toggle('below',ah-ch>200);
   const dpr=Math.min(window.devicePixelRatio||1,3);
@@ -2315,15 +2853,46 @@ function coopHp(ids,wave,prev){
 }
 function startLocal(m){
   audioInit();readOpts();netClose();clearSession();mode=m;NET.slot=null;show('game');
+  if(m==='range'){
+    // тир: один лучник, без деревьев, укрытий и особых стрел — только ветер, мишени и шары
+    const o=Object.assign(gameOpts(),{coop:false,range:true,trees:'none',specials:false,crates:false,cover:false,timer:0,wins:0,size:1});
+    newMatch({seed:randSeed(),starter:'left',score:{left:0,right:0},active:['L0'],opts:o,weather:pickWeather(opts.weather)});
+    return;
+  }
   const o=Object.assign(gameOpts(),{coop:m==='coop'});
   const ids=m==='coop'?(opts.size===2?['L0','L1']:['L0']).concat(coopBots(1)):localIds(opts.size);
   newMatch({seed:randSeed(),starter:'left',score:{left:0,right:0},active:ids,opts:o,weather:pickWeather(opts.weather),wave:1,hp:m==='coop'?coopHp(ids,1):null});
 }
 function toMenu(){
   if(NET.conn&&NET.gameId&&!NET.host)netSend({action:'leave'});
-  clearSession();netClose();S=null;$('over').classList.remove('show');show('menu');
-  renderProgress();
+  clearSession();netClose();S=null;PAUSED=false;$('over').classList.remove('show');show('menu');
+  renderProgress();updateQuick();
 }
+// ---- Пауза: на одном устройстве время останавливается, в онлайне — только экран паузы ----
+let exitArm=0;
+function pauseOpen(){
+  if(!S||mode==='demo'||!$('game').classList.contains('active'))return;
+  cancelDraw();input.keys.l=input.keys.r=0;input.btn=0;
+  PAUSED=mode!=='online';exitArm=0;pauseSync();
+  $('pause').classList.add('show');sfx('pop');
+}
+function pauseClose(){$('pause').classList.remove('show');PAUSED=false;exitArm=0}
+function pauseShown(){return $('pause').classList.contains('show')}
+function pauseSync(){
+  $('pNote').textContent=mode==='online'?'Игра идёт дальше — пауза только на вашем экране.':'Время остановлено.';
+  $('pRestart').textContent=mode==='online'?'🔄 Новый раунд для всех':S&&S.opts.range?'🔄 Начать заново':'🔄 Начать раунд заново';
+  $('pMusic').textContent=SETTINGS.music>0?'🎵':'🔇';$('pMusic').title=SETTINGS.music>0?'Музыка включена':'Музыка выключена';
+  $('pCam').textContent=SETTINGS.cam?'🎥':'📷';$('pCam').title=SETTINGS.cam?'Кинокамера включена':'Кинокамера выключена';
+  $('pExit').textContent='🏠 Выйти в меню';
+}
+function pauseExit(){
+  // случайно выйти из идущей партии обидно — переспрашиваем
+  const risky=S&&!S.over&&(mode==='online'||S.turnNo>0||S.score.left+S.score.right>0||(S.range&&S.range.shot>0));
+  if(risky&&Date.now()-exitArm>3000){exitArm=Date.now();$('pExit').textContent='Точно выйти? Нажмите ещё раз';return}
+  pauseClose();toMenu();
+}
+function pauseRestart(){pauseClose();rematch()}
+function toggleCam(){SETTINGS.cam=!SETTINGS.cam;saveSettings();pauseSync();syncPrefs()}
 
 // ================= Онлайн =================
 // Два способа связи, протокол сообщений у них один и тот же:
@@ -2707,7 +3276,10 @@ function finishOwnFlight(){
     }
   }
 }
-document.addEventListener('visibilitychange',()=>{if(document.hidden)finishOwnFlight();else{resumeNow();if(NET.conn)keepAwake()}});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){finishOwnFlight();if(S&&mode!=='online'&&mode!=='demo'&&!S.over)pauseOpen()} // свернули игру на одном устройстве — ставим паузу
+  else{resumeNow();if(NET.conn)keepAwake()}
+});
 addEventListener('pagehide',finishOwnFlight);
 addEventListener('pageshow',resumeNow);
 addEventListener('focus',resumeNow);
@@ -2932,6 +3504,8 @@ if('serviceWorker' in navigator&&window.isSecureContext&&SERVED)navigator.servic
 
 $('btnSound').textContent=soundOn?'🔊':'🔇';
 renderProgress();
+initMenuUi();
+if(!$('lobby').classList.contains('active')&&!$('game').classList.contains('active'))show('menu');
 requestAnimationFrame(frame);
 </script>
 <div id="toast"></div>

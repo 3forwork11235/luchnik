@@ -25,7 +25,7 @@ const ARROW_KINDS=['fire','heavy','triple'];
 const BONUSES=['fire','heavy','triple','shield','power','heal']; // что бывает в ящике
 const BURN_TURNS=2;   // подожжённое дерево сгорает через столько ходов
 const WEATHERS=['clear','clear','gusty','rain','fog']; // погода раунда (ясно — чаще)
-const HATS=['none','cap','hood','feather','helmet','viking','crown']; // внешний вид: шапка…
+const HATS=['none','cap','hood','feather','helmet','viking','crown','feather2']; // внешний вид: шапка…
 const FLETCH=['team','gold','rainbow','black'];                       // …и оперение стрел
 function cleanSkin(k){k=k||{};return {hat:HATS.includes(k.hat)?k.hat:'none',fletch:FLETCH.includes(k.fletch)?k.fletch:'team'}}
 // Вместе против ИИ: справа — боты, их больше и они крепче с каждой волной
