@@ -1,8 +1,8 @@
-// Комната игры «Лучник» — та же логика, что в server.py, только на JS.
-// В режиме P2P она работает прямо в браузере создателя игры: остальные игроки
-// подключаются к нему через WebRTC, а сам создатель — через «петлю» в памяти.
-// Протокол сообщений тот же, что у server.py, поэтому клиенту всё равно, кто сервер.
-// Если поменяли правила здесь — поменяйте и в server.py (он остался запасным вариантом).
+// Комната игры «Лучник»: места, очерёдность, здоровье, деревья, запас стрел, бонусы.
+// Работает в браузере создателя игры. Остальные игроки подключаются к нему через WebRTC (P2P)
+// или через пересылку server.py, а сам создатель — через «петлю» в памяти.
+// Результат выстрела считает стрелявший; комната его применяет и рассылает всем,
+// поэтому у всех одинаковое состояние, а вернувшийся после обрыва получает его целиком.
 (function(root){
 'use strict';
 const WIND_MAX=6.0;
@@ -20,10 +20,18 @@ function randomGameId(){let s='';for(const x of randBytes(6))s+=ID_CHARS[x%ID_CH
 function toInt(v){const n=Math.trunc(Number(v));return Number.isFinite(n)?n:0}
 function isNum(v){return typeof v==='number'&&Number.isFinite(v)}
 
-function newWind(prev,enabled){
+const AMMO_START={fire:1,heavy:2,triple:1}; // особые стрелы на раунд
+const ARROW_KINDS=['fire','heavy','triple'];
+const BONUSES=['fire','heavy','triple','shield','power','heal']; // что бывает в ящике
+const BURN_TURNS=2;   // подожжённое дерево сгорает через столько ходов
+const WEATHERS=['clear','clear','gusty','rain','fog']; // погода раунда (ясно — чаще)
+
+function newWind(prev,enabled,weather){
   if(!enabled)return 0;
-  const w=prev*0.35+(Math.random()*2-1)*WIND_MAX*0.8;
-  return Math.round(Math.max(-WIND_MAX,Math.min(WIND_MAX,w))*10)/10;
+  // порывистый ветер: сильнее и меняется резче
+  const max=weather==='gusty'?9:WIND_MAX,keep=weather==='gusty'?0.15:0.35;
+  const w=prev*keep+(Math.random()*2-1)*max*0.8;
+  return Math.round(Math.max(-max,Math.min(max,w))*10)/10;
 }
 function cleanOpts(o){
   o=o||{};
@@ -36,6 +44,10 @@ function cleanOpts(o){
     size:o.size===2?2:1,
     bots:flag(o.bots),
     timer:[0,20,30,45].includes(o.timer)?o.timer:0, // секунд на ход, 0 — без ограничения
+    specials:flag(o.specials), // особые стрелы
+    crates:flag(o.crates),     // ящики с бонусами
+    weather:flag(o.weather),   // случайная погода на раунд
+    cover:flag(o.cover),       // камни и кусты
   };
 }
 function cleanName(n){return String(n==null?'':n).trim().slice(0,14)}
@@ -71,10 +83,14 @@ function newRound(g){
   g.over=false;g.winner=null;g.shot=false;
   g.last_idx={left:-1,right:-1};
   g.turn_no=0;  // сколько ходов прошло: от него зависит рост деревьев
-  g.trees={};   // урон деревьям: номер дерева -> {dmg, felled}
+  g.trees={};   // деревья: номер -> {dmg, felled, felled_at, dmg_fell, burn_at}
+  // у каждого бойца: запас особых стрел, щит на одно попадание, двойной урон на следующий выстрел
+  g.st={};
+  for(const s of g.active)g.st[s]={ammo:g.opts.specials?Object.assign({},AMMO_START):{fire:0,heavy:0,triple:0},shield:0,power:0};
+  g.weather=g.opts.weather?WEATHERS[Math.floor(Math.random()*WEATHERS.length)]:'clear';
   const first=members(g,g.starter);
   setTurn(g,(first.length?first:g.active)[0]);
-  g.wind=newWind(0,g.opts.wind);
+  g.wind=newWind(0,g.opts.wind,g.weather);
 }
 function leader(g){
   // «ведущий» — первый игрок на связи: он управляет ботами и птицами
@@ -94,7 +110,7 @@ function slotsView(g){
 }
 function startPayload(g){
   return {type:'game_started',seed:g.seed,wind:g.wind,turn:g.turn,opts:g.opts,score:g.score,active:g.active,
-    turn_no:g.turn_no,trees:g.trees,slots:slotsView(g),leader:leader(g)};
+    turn_no:g.turn_no,trees:g.trees,st:g.st,weather:g.weather,slots:slotsView(g),leader:leader(g)};
 }
 function fullState(g,sid){
   const msg={type:'resumed',game_id:g.id,slot:sid,size:g.opts.size,bots:g.opts.bots,
@@ -172,25 +188,36 @@ class ArcherHub{
   }
   changed(g){if(this.onChange&&this.games[g.id]===g)this.onChange(g)}
 
+  // одно попадание (у тройной стрелы их до трёх)
+  applyHit(g,shooter,r){
+    if(!r||typeof r!=='object')return;
+    const hp=g.hp,st=g.st||{},has=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+    if(r.kind==='player'&&has(hp,r.id)){
+      const s=st[r.id];
+      if(s&&s.shield){s.shield=0;return} // щит принимает удар на себя
+      hp[r.id]=Math.max(0,hp[r.id]-Math.max(0,Math.min(150,toInt(r.dmg))));
+    }else if(r.kind==='bird'&&has(hp,shooter)){
+      hp[shooter]=Math.min(HP_MAX,hp[shooter]+Math.max(0,Math.min(25,toInt(r.heal))));
+    }else if(r.kind==='tree'&&Number.isInteger(r.tree)&&r.tree>=0&&r.tree<8){
+      // деревья считает стрелявший, комната только запоминает — для тех, кто переподключится
+      const t=g.trees[r.tree]||(g.trees[r.tree]={dmg:0,felled:false});
+      t.dmg+=Math.max(0,Math.min(200,toInt(r.tdmg)));
+      // когда срубили — из пня через несколько ходов вырастет новое (это считают сами игроки по felled_at)
+      if(r.felled){t.felled=true;t.felled_at=g.turn_no;t.dmg_fell=t.dmg;t.burn_at=null}
+      else if(r.fire&&t.burn_at==null)t.burn_at=g.turn_no; // огненная стрела подожгла
+    }else if(r.kind==='crate'&&has(st,shooter)&&BONUSES.includes(r.bonus)){
+      const s=st[shooter];
+      if(r.bonus==='heal')hp[shooter]=Math.min(HP_MAX,hp[shooter]+20);
+      else if(r.bonus==='shield')s.shield=1;
+      else if(r.bonus==='power')s.power=1;
+      else s.ammo[r.bonus]+=r.bonus==='heavy'?2:1;
+    }
+  }
   finishTurn(g,result){
     // применяет результат выстрела текущего бойца и передаёт ход
     const hp=g.hp,shooter=g.turn;
-    if(result){
-      const kind=result.kind;
-      if(kind==='player'&&Object.prototype.hasOwnProperty.call(hp,result.id)){
-        const dmg=Math.max(0,Math.min(80,toInt(result.dmg)));
-        hp[result.id]=Math.max(0,hp[result.id]-dmg);
-      }else if(kind==='bird'&&shooter in hp){
-        const heal=Math.max(0,Math.min(15,toInt(result.heal)));
-        hp[shooter]=Math.min(HP_MAX,hp[shooter]+heal);
-      }else if(kind==='tree'&&Number.isInteger(result.tree)&&result.tree>=0&&result.tree<8){
-        // деревья считает стрелявший, комната только запоминает — для тех, кто переподключится
-        const t=g.trees[result.tree]||(g.trees[result.tree]={dmg:0,felled:false});
-        t.dmg+=Math.max(0,Math.min(80,toInt(result.tdmg)));
-        // когда срубили — из пня через несколько ходов вырастет новое (это считают сами игроки по felled_at)
-        if(result.felled){t.felled=true;t.felled_at=g.turn_no;t.dmg_fell=t.dmg}
-      }
-    }
+    const hits=result&&result.kind==='multi'?(Array.isArray(result.hits)?result.hits.slice(0,3):[]):[result];
+    for(const r of hits)this.applyHit(g,shooter,r);
     g.shot=false;
     const alive={};
     for(const t of ['left','right'])alive[t]=members(g,t).some(s=>hp[s]>0);
@@ -200,11 +227,16 @@ class ArcherHub{
       g.score[g.winner]++;
     }else{
       setTurn(g,nextTurn(g,shooter));
-      g.wind=newWind(g.wind,g.opts.wind);
+      g.wind=newWind(g.wind,g.opts.wind,g.weather);
       g.turn_no++;
+      // подожжённые деревья догорают
+      for(const i in g.trees){
+        const t=g.trees[i];
+        if(t.burn_at!=null&&g.turn_no>=t.burn_at+BURN_TURNS){t.felled=true;t.felled_at=g.turn_no;t.dmg_fell=t.dmg;t.burn_at=null}
+      }
     }
     this.broadcast(g,{type:'turn_result',result,hp,turn:g.turn,wind:g.wind,
-      game_over:g.over,winner:g.winner,score:g.score,turn_no:g.turn_no,trees:g.trees});
+      game_over:g.over,winner:g.winner,score:g.score,turn_no:g.turn_no,trees:g.trees,st:g.st});
   }
   dropPendingShot(g){
     // выстрел «повис» (стрелявший пропал) — засчитываем промах, чтобы игра не встала
@@ -343,7 +375,11 @@ class ArcherHub{
       if(!g.started||g.over||g.shot||g.turn!==sid||!canControl(g,me,sid))return;
       g.shot=true;
       if(isNum(data.x))g.pos[sid]=data.x;
-      this.broadcast(g,{type:'arrow_shot',id:sid,x:data.x,angle:data.angle,draw:data.draw,no:data.no},ws);
+      // особая стрела тратит запас; двойной урон расходуется на этот выстрел
+      const kind=ARROW_KINDS.includes(data.kind)?data.kind:'normal',s=g.st&&g.st[sid];
+      if(s&&kind!=='normal')s.ammo[kind]=Math.max(0,s.ammo[kind]-1);
+      const power=!!(s&&s.power);if(s)s.power=0;
+      this.broadcast(g,{type:'arrow_shot',id:sid,x:data.x,angle:data.angle,draw:data.draw,no:data.no,kind,power},ws);
     }else if(action==='skip'){
       // время на ход вышло, а лук не натянут — ход переходит дальше
       const sid=data.id;
@@ -354,6 +390,8 @@ class ArcherHub{
       if(g.started&&now-c.emoteAt>1000&&e>=0&&e<16){c.emoteAt=now;this.broadcast(g,{type:'emote',id:me,e},ws)}
     }else if(action==='bird_spawn'){
       if(leader(g)===me)this.broadcast(g,{type:'bird_spawn',birds:data.birds||[]},ws);
+    }else if(action==='crate_spawn'){
+      if(leader(g)===me&&g.opts.crates&&data.crate)this.broadcast(g,{type:'crate_spawn',crate:data.crate},ws);
     }else if(action==='arrow_result'){
       const sid=data.id;
       if(g.started&&!g.over&&g.shot&&g.turn===sid&&canControl(g,me,sid))this.finishTurn(g,data.result||{});
@@ -409,7 +447,7 @@ class ArcherHub{
   }
   restore(snap){
     const g=JSON.parse(JSON.stringify(snap));
-    if(g.started){g.trees=g.trees||{};g.turn_no=g.turn_no||0} // снимок мог остаться от версии без деревьев
+    if(g.started){g.trees=g.trees||{};g.turn_no=g.turn_no||0;g.st=g.st||{};g.weather=g.weather||'clear'} // снимок от прошлой версии
     for(const s in g.slots)Object.assign(g.slots[s],{ws:null,online:false,tasks:[]});
     this.games[g.id]=g;
     // все пока «отошли»: кто не вернётся вовремя — уступит место боту, как при обрыве связи
