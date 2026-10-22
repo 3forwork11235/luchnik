@@ -1402,13 +1402,18 @@ function tOpen(t){if(t.readyState!==0)return;t.readyState=1;if(t.onopen)t.onopen
 function tLost(t,err){if(t.readyState===3)return;t.readyState=3;if(err)t.err=err;if(t.onclose)t.onclose()}
 function tData(t,raw){if(t.readyState!==1||!t.onmessage)return;let m;try{m=typeof raw==='string'?JSON.parse(raw):raw}catch(e){return}t.onmessage(m)}
 
-function wsTransport(url){
+// Гость через server.py: просим переслать нас к хосту игры gid, дальше сообщения идут как есть
+function relayTransport(url,gid){
   const t=transport();
   let ws;
   try{ws=new WebSocket(url)}catch(e){t.readyState=3;t.err='bad-url';return t}
-  ws.onopen=()=>tOpen(t);
-  ws.onmessage=e=>tData(t,e.data);
-  ws.onclose=()=>tLost(t);
+  ws.onopen=()=>{ws.send(JSON.stringify({action:'relay_join',game_id:gid}));tOpen(t)};
+  ws.onmessage=e=>{
+    let m;try{m=JSON.parse(e.data)}catch(_){return}
+    if(m&&m.type==='relay_nohost'){t.err='peer-unavailable';return} // хоста нет — сервер сейчас отключит
+    tData(t,m);
+  };
+  ws.onclose=()=>tLost(t,t.err);
   t.send=o=>ws.send(JSON.stringify(o));
   t.close=()=>{t.readyState=3;try{ws.close(1000)}catch(e){}};
   return t;
@@ -1500,20 +1505,60 @@ function peerTransport(gid){
   return t;
 }
 
-// --- хост P2P: комната живёт в этом браузере, гости подключаются через PeerJS ---
+// --- хост: комната (room.js) живёт в браузере создателя игры ---
+// Гости подключаются к ней через PeerJS (P2P) или через пересылку server.py (режим «через сервер»).
+// «Слушатель» (listener) — то, что принимает гостей; у обоих видов есть destroy().
 // Снимок комнаты сохраняется, чтобы игра пережила перезагрузку вкладки хоста.
 const HOST_KEY='archer_host';
-const HOST={peer:null,hub:null,gid:null,saveT:null};
-function hostListen(gid){
+const HOST={listener:null,hub:null,gid:null,saveT:null};
+function hostListen(gid){return NET.via==='ws'?relayListen(gid):peerListen(gid)}
+function peerListen(gid){
   return Promise.all([loadPeerJs(),iceServers()]).then(([,ice])=>new Promise((res,rej)=>{
     const peer=new Peer(PEER_PREFIX+gid,peerOpts(ice));
+    const L={peer,destroy(){try{peer.destroy()}catch(e){}}};
     let opened=false;
-    peer.on('open',()=>{opened=true;res(peer)});
-    peer.on('error',e=>{if(!opened){try{peer.destroy()}catch(_){}rej(e&&e.type||'error')}});
+    peer.on('open',()=>{opened=true;res(L)});
+    peer.on('error',e=>{if(!opened){L.destroy();rej(e&&e.type||'error')}});
     // пропала связь с сервером знакомств — играющие гости не заметят, но новые не подключатся: возвращаемся
-    peer.on('disconnected',()=>setTimeout(()=>{if(HOST.peer===peer&&!peer.destroyed&&peer.disconnected)try{peer.reconnect()}catch(e){}},2000));
+    peer.on('disconnected',()=>setTimeout(()=>{if(HOST.listener===L&&!peer.destroyed&&peer.disconnected)try{peer.reconnect()}catch(e){}},2000));
     peer.on('connection',hostAccept);
   }));
+}
+// Хост через server.py: сервер пересылает сообщения гостей, помечая их номером связи (cid)
+function relayListen(gid){
+  return new Promise((res,rej)=>{
+    let ws;try{ws=new WebSocket(wsUrl())}catch(e){rej('bad-url');return}
+    const guests=new Map(); // cid -> сессия гостя в комнате
+    const L={destroyed:false,destroy(){L.destroyed=true;try{ws.close()}catch(e){}}};
+    const send=o=>{if(ws.readyState===1)ws.send(JSON.stringify(o))};
+    let ok=false;
+    ws.onopen=()=>send({action:'relay_host',game_id:gid});
+    ws.onmessage=e=>{
+      let m;try{m=JSON.parse(e.data)}catch(_){return}
+      if(m.type==='relay_ok'){ok=true;res(L)}
+      else if(m.type==='relay_taken'){rej('unavailable-id');L.destroy()}
+      else if(m.type==='relay_open'&&HOST.hub){
+        const cid=m.cid;
+        guests.set(cid,HOST.hub.connect({
+          send:o=>send({action:'relay_send',cid,data:o}),
+          close:()=>setTimeout(()=>send({action:'relay_close',cid}),300), // даём уйти последнему сообщению
+        }));
+      }else if(m.type==='relay_msg'){const s=guests.get(m.cid);if(s)s.message(m.data)}
+      else if(m.type==='relay_close'){const s=guests.get(m.cid);if(s){guests.delete(m.cid);s.closed()}}
+    };
+    ws.onclose=()=>{
+      for(const s of guests.values())s.closed();
+      guests.clear();
+      if(!ok){rej('server');return}
+      // связь с сервером пропала: гостей он уже отключил — регистрируемся снова, они переподключатся сами
+      if(!L.destroyed&&HOST.listener===L)setTimeout(()=>relayRelisten(L,gid),2000);
+    };
+  });
+}
+function relayRelisten(old,gid){
+  if(HOST.listener!==old)return;
+  relayListen(gid).then(nl=>{if(HOST.listener===old)HOST.listener=nl;else nl.destroy()},
+    ()=>setTimeout(()=>relayRelisten(old,gid),3000));
 }
 function hostAccept(dc){
   if(!HOST.hub){try{dc.close()}catch(e){}return}
@@ -1528,8 +1573,8 @@ function hostAccept(dc){
   const gone=()=>{if(sess){const s=sess;sess=null;s.closed()}};
   dc.on('close',gone);dc.on('error',gone);
 }
-function hostSetup(peer,gid,snap){
-  HOST.peer=peer;HOST.gid=gid;
+function hostSetup(listener,gid,snap){
+  HOST.listener=listener;HOST.gid=gid;
   HOST.hub=new ArcherHub({
     log:m=>console.log(m),
     onChange:hostSave,
@@ -1546,20 +1591,20 @@ function hostSave(){
   },300);
 }
 function hostStop(){
-  const {peer,hub,gid,saveT}=HOST;
-  if(!peer&&!hub)return;
-  Object.assign(HOST,{peer:null,hub:null,gid:null,saveT:null});
+  const {listener,hub,gid,saveT}=HOST;
+  if(!listener&&!hub)return;
+  Object.assign(HOST,{listener:null,hub:null,gid:null,saveT:null});
   if(saveT)clearTimeout(saveT);
   if(hub&&gid)hub.shutdown(gid); // гостям уходит «игра закрыта»
-  if(peer)setTimeout(()=>{try{peer.destroy()}catch(e){}},600);
+  if(listener)setTimeout(()=>listener.destroy(),600);
   lsDel(HOST_KEY);
 }
 function hostCreate(){
-  // код игры = адрес хоста у сервера знакомств; если такой занят — берём другой
+  // код игры = адрес хоста (у сервера знакомств или у server.py); если такой занят — берём другой
   let tries=0;
   const attempt=()=>{
     const gid=ArcherHub.randomGameId();
-    return hostListen(gid).then(peer=>({peer,gid}),err=>{if(err==='unavailable-id'&&++tries<5)return attempt();throw err});
+    return hostListen(gid).then(listener=>({listener,gid}),err=>{if(err==='unavailable-id'&&++tries<5)return attempt();throw err});
   };
   return attempt();
 }
@@ -1572,9 +1617,10 @@ function hostRestore(gid){
     if(err==='unavailable-id'&&++tries<10)return new Promise(r=>setTimeout(r,2500)).then(attempt);
     throw err;
   });
-  return attempt().then(peer=>({peer,game:saved.game}));
+  return attempt().then(listener=>({listener,game:saved.game}));
 }
 function hostErrText(err){
+  if(NET.via==='ws')return'❌ Нет связи с сервером на компьютере ('+wsUrl()+'). Проверьте, что server.py запущен и устройство в той же сети.';
   if(err==='no-lib')return'❌ Не удалось загрузить модуль связи — нужен интернет.';
   if(err==='browser-incompatible')return'❌ Этот браузер не поддерживает прямое соединение (WebRTC). Попробуйте Chrome или Safari.';
   return'❌ Нет связи с сервером знакомств (PeerJS) — нужен интернет. Без интернета выберите «Через сервер на компьютере». (код: '+err+')';
@@ -1602,12 +1648,11 @@ function clearSession(){
   lsDel(SESS_KEY);
 }
 function makeTransport(gid){
-  if(NET.via==='ws')return wsTransport(wsUrl());
   if(NET.host){
     if(HOST.hub)return loopTransport();
     const t=transport();t.readyState=3;t.err='no-host';return t;
   }
-  return peerTransport(gid);
+  return NET.via==='ws'?relayTransport(wsUrl(),gid):peerTransport(gid);
 }
 function openSocket(first){
   const t=makeTransport(first.game_id||NET.gameId);
@@ -1621,8 +1666,8 @@ function openSocket(first){
   t.onclose=()=>{if(NET.conn!==t)return;NET.conn=null;NET.err=t.err;socketLost()};
 }
 function lostText(){
-  if(NET.via==='ws')return'❌ Нет соединения с сервером. Проверьте, что сервер запущен'+(PY_SERVER?' и устройство в той же сети.':' и адрес верный.');
   if(NET.err==='peer-unavailable')return'❌ Игра не найдена. Проверьте код — и что создатель игры её не закрыл.';
+  if(NET.via==='ws')return'❌ Нет соединения с сервером. Проверьте, что сервер запущен'+(PY_SERVER?' и устройство в той же сети.':' и адрес верный.');
   if(NET.err==='no-lib')return'❌ Не удалось загрузить модуль связи — нужен интернет.';
   const code=' (код: '+(NET.err||'closed')+(hasTurn()?'':', без TURN')+')';
   if(/^ice-|timeout|negotiation/.test(NET.err||''))
@@ -1706,14 +1751,14 @@ function netConnect(first){
 function netCreate(){
   readOpts();
   const first={action:'create_game',name:myName(),opts:gameOpts()};
-  if(NET.via==='ws'){netConnect(first);return}
-  // P2P: сначала регистрируем это устройство как хост, потом входим в свою же комнату
+  // сначала регистрируем это устройство как хост (у PeerJS или у server.py), потом входим в свою же комнату
   audioInit();netClose();clearSession();
+  if(NET.via==='ws'&&!PY_SERVER){const v=$('serverIp').value.trim();if(v)serverIp=v}
   const seq=NET.createSeq;
   netStatus('Создаём игру…');
-  hostCreate().then(({peer,gid})=>{
-    if(seq!==NET.createSeq){try{peer.destroy()}catch(e){}return} // пока ждали, ушли в другое место
-    hostSetup(peer,gid);
+  hostCreate().then(({listener,gid})=>{
+    if(seq!==NET.createSeq){listener.destroy();return} // пока ждали, ушли в другое место
+    hostSetup(listener,gid);
     NET.host=true;first.game_id=gid;
     openSocket(first);
   },err=>{if(seq===NET.createSeq)netStatus(hostErrText(err))});
@@ -1874,28 +1919,27 @@ function netNotice(){
   // Вкладку перезагрузили посреди игры — возвращаемся в неё
   const s=loadSession();
   if(!s)return;
-  if(s.via==='p2p'){
-    setVia('p2p');NET.gameId=s.gid;NET.slot=s.slot;NET.token=s.token;NET.host=!!s.host;
-    netStatus('Возвращаемся в игру '+s.gid+'…');
-    if(!s.host){scheduleReconnect(0);return}
-    // мы были хостом: поднимаем комнату из снимка, гости переподключатся сами
-    const seq=NET.createSeq;
-    hostRestore(s.gid).then(({peer,game})=>{
-      if(seq!==NET.createSeq||NET.gameId!==s.gid){try{peer.destroy()}catch(e){}return}
-      hostSetup(peer,s.gid,game);
-      scheduleReconnect(0);
-    },err=>{
-      if(seq!==NET.createSeq)return;
-      clearSession();lsDel(HOST_KEY);
-      netStatus(err==='no-snapshot'?'Игра '+s.gid+' закрыта — создайте новую.':hostErrText(err));
-    });
-  }else if(!SERVED||s.ws===AUTO_WS){
+  if(s.via==='p2p')setVia('p2p');
+  else{
+    // через server.py: продолжаем, только если страница открыта с того же сервера
+    if(SERVED&&s.ws!==AUTO_WS)return;
     if(SERVED)PY_SERVER=true;else serverIp=s.ws;
     setVia('ws');
-    NET.gameId=s.gid;NET.slot=s.slot;NET.token=s.token;
-    netStatus('Возвращаемся в игру '+s.gid+'…');
-    scheduleReconnect(0);
   }
+  NET.gameId=s.gid;NET.slot=s.slot;NET.token=s.token;NET.host=!!s.host;
+  netStatus('Возвращаемся в игру '+s.gid+'…');
+  if(!s.host){scheduleReconnect(0);return}
+  // мы были хостом: поднимаем комнату из снимка, гости переподключатся сами
+  const seq=NET.createSeq;
+  hostRestore(s.gid).then(({listener,game})=>{
+    if(seq!==NET.createSeq||NET.gameId!==s.gid){listener.destroy();return}
+    hostSetup(listener,s.gid,game);
+    scheduleReconnect(0);
+  },err=>{
+    if(seq!==NET.createSeq)return;
+    clearSession();lsDel(HOST_KEY);
+    netStatus(err==='no-snapshot'?'Игра '+s.gid+' закрыта — создайте новую.':hostErrText(err));
+  });
 })();
 
 // PWA: игру можно «установить» на экран телефона и запускать без адресной строки
