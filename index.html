@@ -2851,7 +2851,7 @@ addEventListener('orientationchange',()=>setTimeout(fit,250));
 if(window.visualViewport)visualViewport.addEventListener('resize',fit);
 
 const fsEl=document.documentElement;
-const fsSupported=!!(fsEl.requestFullscreen||fsEl.webkitRequestFullscreen);
+const fsSupported=!!(fsEl.requestFullscreen||fsEl.webkitRequestFullscreen)&&!/LuchnikApp\//.test(navigator.userAgent); // приложение и так во весь экран
 if(fsSupported)$('btnFs').style.display='';
 function inFullscreen(){return !!(document.fullscreenElement||document.webkitFullscreenElement)}
 function toggleFullscreen(){
@@ -2950,6 +2950,9 @@ function toggleCam(){SETTINGS.cam=!SETTINGS.cam;saveSettings();pauseSync();syncP
 // Поэтому комната держит место игрока, а страница сама переподключается и продолжает игру.
 const NET={conn:null,via:'p2p',host:false,slot:null,gameId:null,token:null,lan:[],retry:0,rtimer:null,pingAt:0,pongAt:0,slots:{},leader:null,size:1,started:false,err:null,createSeq:0};
 const SERVED=/^https?:$/.test(location.protocol);
+// Игра внутри Android-приложения (APK): страницы отдаёт само приложение с адреса appassets.androidplatform.net
+const IN_APP=/LuchnikApp\//.test(navigator.userAgent);
+const SITE_URL='https://3forwork11235.github.io/luchnik/';
 const AUTO_WS=SERVED?(location.protocol==='https:'?'wss://':'ws://')+location.host:null;
 let PY_SERVER=false; // страницу отдал server.py — к нему подключаемся автоматически
 let serverIp=lsGet('archer_server_ip')||'127.0.0.1:8765';
@@ -3053,7 +3056,7 @@ function loopTransport(){
 
 // --- PeerJS: знакомит браузеры через свой бесплатный сервер, дальше связь идёт напрямую (WebRTC) ---
 // Свой сервер знакомств можно задать так: localStorage.archer_peer='{"host":"…","port":443,"path":"/","secure":true}'
-const PEERJS_URLS=['https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js','https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'];
+const PEERJS_URLS=[...(IN_APP?['vendor/peerjs.min.js']:[]),'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js','https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'];
 const PEER_PREFIX='luchnik-archer-';
 let peerLib=null;
 function loadPeerJs(){
@@ -3143,7 +3146,7 @@ function peerTransport(gid){
 // провайдера режут зашифрованный поток WebRTC. Тогда гость через несколько секунд сам переходит на этот канал:
 // сообщения идут через сервер, как у обычного сайта. Создатель игры слушает оба пути сразу.
 // Темы: <база>/h — создателю, <база>/g/<cid> — конкретному гостю. (Так же сделано в «Ножах».)
-const MQTT_URLS=['https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js','https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js'];
+const MQTT_URLS=[...(IN_APP?['vendor/mqtt.min.js']:[]),'https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js','https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js'];
 const MQ_BROKERS=['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://test.mosquitto.org:8081/mqtt'];
 const MQ_SWITCH=6000; // через сколько мс без открытого канала P2P гость пробует запасной
 let mqttLib=null;
@@ -3602,7 +3605,7 @@ function netJoin(){
 }
 function inviteLink(){
   if(!SERVED||!NET.gameId)return null;
-  let base=location.origin+location.pathname.replace(/index\.html$/,'');
+  let base=IN_APP?SITE_URL:location.origin+location.pathname.replace(/index\.html$/,''); // из приложения зовём на сайт — откроется в любом браузере
   if(/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)&&NET.lan.length)base=NET.lan[0]+'/';
   return base+(NET.via==='p2p'?'#p2p=':'#')+NET.gameId;
 }
@@ -3781,7 +3784,7 @@ try{(function(){
 })()}catch(e){console.error(e)} // сбой здесь не должен мешать запуску игры
 
 // PWA: игру можно «установить» на экран телефона и запускать без адресной строки
-if('serviceWorker' in navigator&&window.isSecureContext&&SERVED)navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&window.isSecureContext&&SERVED&&!IN_APP)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 $('btnSound').textContent=soundOn?'🔊':'🔇';
 try{renderProgress()}catch(e){console.error(e)}
