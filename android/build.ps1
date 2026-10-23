@@ -41,7 +41,7 @@ Run "$bt\aapt2.exe" link -o "$work\base.apk" -I $jar --manifest "$work\AndroidMa
   --java "$work\gen" "$work\res.zip"
 
 $srcs = Get-ChildItem "$work\src", "$work\gen" -Recurse -Filter *.java | ForEach-Object { $_.FullName }
-Run "$jdk\bin\javac.exe" -nowarn "-Xlint:-options" -source 8 -target 8 -encoding UTF-8 -bootclasspath $jar -d "$work\classes" @srcs
+Run "$jdk\bin\javac.exe" -nowarn "-Xlint:-options" -source 8 -target 8 -encoding UTF-8 -bootclasspath "$jar;$bt\core-lambda-stubs.jar" -d "$work\classes" @srcs
 $classes = Get-ChildItem "$work\classes" -Recurse -Filter *.class | ForEach-Object { $_.FullName }
 Run "$bt\d8.bat" --release --min-api 24 --lib $jar --output "$work\dex" @classes
 

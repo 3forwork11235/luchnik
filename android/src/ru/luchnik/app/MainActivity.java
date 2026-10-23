@@ -2,6 +2,7 @@ package ru.luchnik.app;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -19,7 +20,9 @@ import android.widget.Toast;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 // Обёртка «Лучника»: игра (index.html + room.js) лежит внутри APK в assets.
@@ -41,6 +44,19 @@ public class MainActivity extends Activity {
 
         web = new WebView(this);
         web.setBackgroundColor(0xFF121725);
+        // удержание пальца при натяжении лука — не «долгое нажатие» системы (выделение, вибрация, меню)
+        web.setOnLongClickListener(v -> true);
+        web.setLongClickable(false);
+        web.setHapticFeedbackEnabled(false);
+        // жест «назад» от края экрана не должен перехватывать натяжение: лучники стоят внизу у краёв
+        if (Build.VERSION.SDK_INT >= 29)
+            web.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                int w = r - l, h = b - t, lim = (int) (200 * getResources().getDisplayMetrics().density);
+                List<Rect> rects = new ArrayList<>();
+                rects.add(new Rect(0, Math.max(0, h - lim), w / 2, h));
+                rects.add(new Rect(w / 2, Math.max(0, h - lim), w, h));
+                v.setSystemGestureExclusionRects(rects);
+            });
         setContentView(web);
 
         WebSettings s = web.getSettings();

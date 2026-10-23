@@ -162,6 +162,27 @@ input[type=range]{width:100%;accent-color:#ffcf4a;height:24px}
 .medal{display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 12px;border-radius:12px;background:rgba(255,207,74,.10);border:1px solid rgba(255,207,74,.35);min-width:100px;animation:rise .45s ease both}
 .medal .mi{font-size:24px}.medal b{font-size:12.5px;color:var(--gold)}.medal span{font-size:12px;color:#dfe5f2}
 #ctlSys .btn{font-size:calc(var(--s)*0.38)}
+/* телефон в горизонтальном положении: высоты мало — логотип слева, вкладки и содержимое справа, всё ужато */
+@media(orientation:landscape) and (max-height:540px){
+  .mwrap{max-width:1100px;display:grid;grid-template-columns:minmax(160px,24%) 1fr;column-gap:22px;align-items:start;
+    padding-top:max(10px,env(safe-area-inset-top));padding-bottom:12px}
+  .mwrap>*{grid-column:2}
+  .mwrap>.logo{grid-column:1;grid-row:1/span 30;position:sticky;top:10px;margin:4px 0 0}
+  .crest svg{width:54px;height:54px}
+  .title{font-size:clamp(26px,4.2vw,40px);letter-spacing:.1em;padding-left:.1em;margin-top:6px}
+  .tag{font-size:10px;letter-spacing:.12em;margin-top:6px;text-align:center}
+  .tabs{margin:0 0 10px;gap:5px;justify-content:flex-start}
+  .tabs button{padding:7px 11px;font-size:13px}
+  .joinq{margin:0 0 10px;max-width:none}
+  .joinq input,.joinq .btn{padding-top:8px;padding-bottom:8px}
+  .modes{gap:8px}
+  .mode{padding:9px 12px;gap:10px;border-radius:14px}
+  .mode .mi{width:40px;height:40px;font-size:24px;border-radius:11px}
+  .mode b{font-size:16px}.mode small{font-size:12px;margin-top:1px}
+  .quick{margin-top:8px;line-height:1.45}
+  .card.glass{padding:10px 14px;margin-bottom:8px}
+  .foot{margin-top:8px}
+}
 </style>
 </head>
 <body>
@@ -404,7 +425,7 @@ input[type=range]{width:100%;accent-color:#ffcf4a;height:24px}
 <script src="room.js"></script>
 <script>
 'use strict';
-const APP_VER='2.5'; // видно в меню и в паузе — по нему ясно, что на устройстве свежая версия
+const APP_VER='2.6'; // видно в меню и в паузе — по нему ясно, что на устройстве свежая версия
 // Любая ошибка показывается плашкой с версией: по скриншоту сразу ясно, что случилось на устройстве игрока
 let errShown=0;
 function reportError(msg){
@@ -876,6 +897,9 @@ cv.addEventListener('pointerup',e=>{
   else{p.draw=0;p.sway=0}
 });
 cv.addEventListener('pointercancel',e=>{if(e.pointerId===input.pid)cancelDraw()});
+// Касание поля — только наше: без этого некоторые телефоны (WebView, оболочки производителей) на удержании
+// пальца запускают своё (выделение, меню, прокрутку) и обрывают натяжение через pointercancel
+for(const t of ['touchstart','touchmove'])cv.addEventListener(t,e=>{if(e.cancelable)e.preventDefault()},{passive:false});
 document.addEventListener('gesturestart',e=>e.preventDefault()); // iOS: без зума щипком
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 function cancelDraw(){
